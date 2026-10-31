@@ -94,7 +94,7 @@ affinity: {}
 
 api:
   image:
-    repository: ghcr.io/oransim/opengym-api
+    repository: ghcr.io/oransim/opengym-oran-api
     pullPolicy: Always
     tag: edge                # this fork's main branch; keep in step with web.image.tag
   service:
@@ -110,7 +110,7 @@ api:
     DATA_DIR: /data
     RP_ID: opengym.example.com
     ORIGIN: https://opengym.example.com
-    RP_NAME: openGym
+    RP_NAME: Open Gym Oran
     INVITE_ONLY: ""          # "1" = signup needs an invite code
     ALLOW_GUEST: ""          # "0" = no "Continue without account"
     DEFAULT_LANG: ""         # en, de, pt-BR, th, ...
@@ -149,7 +149,7 @@ api:
 
 web:
   image:
-    repository: ghcr.io/oransim/opengym-web
+    repository: ghcr.io/oransim/opengym-oran-web
     pullPolicy: Always
     tag: edge
   service:

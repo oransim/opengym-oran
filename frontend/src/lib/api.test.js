@@ -75,7 +75,7 @@ describe('api() refuses an answer that is not the server\'s', () => {
     await expect(api('/api/data')).rejects.toMatchObject({ status: 502, message: 'HTTP 502', data: {} })
   })
 
-  it('pairing with something that is not an openGym server fails instead of saving an empty pairing', async () => {
+  it('pairing with something that is not an Open Gym Oran server fails instead of saving an empty pairing', async () => {
     const { pairRedeem } = await import('./api.js')
     vi.stubGlobal('fetch', async () => html())
     await expect(pairRedeem('https://gym.example.com', 'ABCD2345')).rejects.toMatchObject({ code: 'bad-response' })
@@ -214,11 +214,11 @@ describe('a write refused for the wrong address', () => {
     answer(403, { error: 'cross-origin request refused', code: 'origin-mismatch', expected: 'http://localhost:8080' })
     const e = await api('/api/data', { method: 'PUT', body: '{}' }).catch(x => x)
     expect(e.status).toBe(403)
-    expect(e.message).toBe(de[KEY].replace('{0}', 'http://localhost:8080'))
+    expect(e.message).toBe(de[KEY].replace('openGym', 'Open Gym Oran').replace('{0}', 'http://localhost:8080'))
   })
   it('a passkey refused for the same reason says the same', () => {
     const e = Object.assign(new Error('Unexpected authentication response origin ...'), { status: 400, data: { code: 'origin-mismatch', expected: 'https://gym.example.com' } })
-    expect(passkeyError(e, 'x')).toBe(KEY.replace('{0}', 'https://gym.example.com'))
+    expect(passkeyError(e, 'x')).toBe(KEY.replace('openGym', 'Open Gym Oran').replace('{0}', 'https://gym.example.com'))
   })
   it('any other refusal keeps the server\'s words', async () => {
     answer(403, { error: 'forbidden' })

@@ -20,7 +20,7 @@ spec:
         - name: api
           # Both images are built from this fork's main branch by docker-publish.yml.
           # They share the moving edge tag; restart the Deployment after publishing a new build.
-          image: ghcr.io/oransim/opengym-api:edge
+          image: ghcr.io/oransim/opengym-oran-api:edge
           imagePullPolicy: Always
           env:
             - name: PORT
@@ -62,7 +62,7 @@ spec:
             limits:
               memory: 512Mi
         - name: web
-          image: ghcr.io/oransim/opengym-web:edge   # same build as the api container
+          image: ghcr.io/oransim/opengym-oran-web:edge   # same build as the api container
           imagePullPolicy: Always
           env:
             # Not the image's default 80: the image runs as uid 101, which can bind a port below

@@ -19,11 +19,11 @@ ARG VCS_REF=dev
 ARG BUILD_DATE=unknown
 
 LABEL maintainer="Oran Simhon https://github.com/oransim" \
-    org.opencontainers.image.title="opengym-api" \
+    org.opencontainers.image.title="Open Gym Oran API" \
     org.opencontainers.image.description="Backend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, passkey login. Your data, your server." \
-    org.opencontainers.image.source="https://github.com/oransim/openGym" \
-    org.opencontainers.image.url="https://opengym.ch" \
-    org.opencontainers.image.documentation="https://github.com/oransim/openGym#readme" \
+    org.opencontainers.image.source="https://github.com/oransim/opengym-oran" \
+    org.opencontainers.image.url="https://github.com/oransim/opengym-oran" \
+    org.opencontainers.image.documentation="https://github.com/oransim/opengym-oran#readme" \
     org.opencontainers.image.licenses="AGPL-3.0-or-later" \
     org.opencontainers.image.version=$VERSION \
     org.opencontainers.image.revision=$VCS_REF \

@@ -1,6 +1,6 @@
-# openGym Helm chart
+# Open Gym Oran Helm chart
 
-Installs openGym on Kubernetes: the API and the web container in a single pod, a PVC for the data, a
+Installs Open Gym Oran on Kubernetes: the API and the web container in a single pod, a PVC for the data, a
 Service, and optionally an Ingress or a Gateway API HTTPRoute with a cert-manager certificate. It
 deploys the same thing as the plain manifests in [`kubernetes/`](../kubernetes), but lets you set
 everything from values.
@@ -13,8 +13,8 @@ Read [docs/SELF_HOSTING.md](../docs/SELF_HOSTING.md) first. The passkey requirem
 ## Install
 
 ```bash
-git clone https://github.com/oransim/openGym
-cd openGym
+git clone https://github.com/oransim/opengym-oran
+cd opengym-oran
 
 helm install opengym ./helm -n fitness --create-namespace \
   --set api.env.RP_ID=gym.example.com \
@@ -34,11 +34,12 @@ helm test opengym -n fitness          # calls /api/health through the web contai
 ```
 
 Pods restart on their own when the ConfigMap or Secret changes.
-The default API and web images are published from this fork's `main` branch as `:edge` by
-`.github/workflows/docker-publish.yml`. After a new image build finishes, restart the Deployment
+The default API and web images can be published from this fork's `main` branch as `:edge` by
+`.github/workflows/docker-publish.yml`. Actions is currently disabled, so publish both images
+before installing this chart. After a new image build finishes, restart the Deployment
 to use it: `kubectl rollout restart deployment/opengym -n fitness`. Both images must come from
 the same source revision.
-On a new GitHub fork, enable Actions in the repository's Actions tab before expecting images.
+Enable Actions in the repository's Actions tab only when you are ready to publish images.
 GHCR may initially make new packages private; make both packages public for anonymous cluster
 pulls, or configure Kubernetes `imagePullSecrets` for a private deployment.
 
@@ -130,7 +131,7 @@ The chart keeps the PVC on `helm uninstall` (`helm.sh/resource-policy: keep`). T
 the data, delete it by hand.
 
 The exercise stills and animations are part of the web image, so there is no media volume. Charts
-before openGym 1.4.0 created a `<release>-media` PVC for a download; after upgrading it is no
+before Open Gym Oran 1.4.0 created a `<release>-media` PVC for a download; after upgrading it is no
 longer mounted, and since Helm keeps it, delete it by hand once the new pod runs.
 
 ### Images

@@ -6,6 +6,15 @@ import {
 import { EXDB } from './exercises-data.js'
 import de from '../locales/de.js'
 
+describe('fork branding', () => {
+  it('shows the fork name without changing stored paths or interpolation values', () => {
+    _setLangState('en', {}, null, null)
+    expect(t('Open openGym on your phone')).toBe('Open Open Gym Oran on your phone')
+    expect(t('Backup to Documents/openGym')).toBe('Backup to Documents/openGym')
+    expect(t('Hello {0}', 'openGym')).toBe('Hello openGym')
+  })
+})
+
 describe('baseLang', () => {
   it('maps a derived locale to the language whose packs it loads', () => {
     expect(baseLang('de-CH')).toBe('de')

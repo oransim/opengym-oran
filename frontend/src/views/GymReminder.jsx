@@ -20,7 +20,7 @@ import {
 // Asked only on an explicit tap of Search, never while typing (Nominatim's usage policy), with a
 // User-Agent that says who is asking.
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
-const USER_AGENT = 'openGym/' + (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev') + ' (gym reminder; +https://opengym.ch)'
+const USER_AGENT = 'OpenGymOran/' + (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev') + ' (gym reminder; +https://github.com/oransim/opengym-oran)'
 export async function searchAddress(q, fetcher = nativeFetch) {
   const query = String(q || '').trim()
   if (!query) return []
