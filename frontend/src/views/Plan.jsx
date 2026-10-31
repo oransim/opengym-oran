@@ -13,6 +13,7 @@ import { SeasonDeco } from '../components/Seasonal.jsx'
 import { Button, Row, Section, Segmented } from '../components/ui.jsx'
 import SwipeRow from '../components/SwipeRow.jsx'
 import { copyRoutine, deleteRoutine, restoreRoutine, routineSnapshot } from '../lib/routines.js'
+import { isVisitRoutine } from '../lib/visit-routine.js'
 import MiniBodyMap from '../components/MiniBodyMap.jsx'
 import { workoutControls } from '../lib/workout-controls.js'
 import { tappable } from '../lib/use-sheet-keyboard.js'
@@ -154,7 +155,7 @@ export default function Plan() {
     const has = planHasRoutines(S)
     menuSheet({
       title: t('Plan'),
-      subtitle: has ? null : t('Add an exercise to a routine first. An empty plan has nothing to share.'),
+      subtitle: has ? null : t('Add exercises to a routine or create a visit first. An empty plan has nothing to share.'),
       items: [
         { icon: 'share', label: t('Export plan file'), sub: t('A small file a friend can import into their own openGym. Routines only, none of your workouts or weigh-ins.'), disabled: !has, onClick: exportPlanFile },
         { icon: 'note', label: t('Print / Save as PDF'), disabled: !has, onClick: printWholePlan },
@@ -279,7 +280,7 @@ function Schedule({ S, update, nav, mode }) {
       <span className={'lrow-i' + (rs.length ? '' : ' rest')}><Icon name={rs.length ? glyphOf(rs[0].emoji) : 'moon'} /></span>
       <div className="grow">
         <div className="tt">{rs.length ? deriveSessionName(rs.map(r => r.name)) : t('Rest day')}</div>
-        <div className="ss">{rs.length === 1 ? exCount(rs[0].ex.length) : rs.length ? routineCount(rs.length) : t('Tap to plan something')}</div>
+        <div className="ss">{rs.length === 1 ? isVisitRoutine(rs[0]) ? t('Visit') : exCount(rs[0].ex.length) : rs.length ? routineCount(rs.length) : t('Tap to plan something')}</div>
       </div>
       {rs.length > 0 && <MiniBodyMap routines={rs} body={S.body} />}
       <Icon name="chevronRight" className="chev" />
@@ -357,7 +358,7 @@ function Schedule({ S, update, nav, mode }) {
             <span className={'lrow-i' + (rest ? ' rest' : '')}><Icon name={rest ? 'moon' : glyphOf(r?.emoji)} /></span>
             <div className="grow" style={{ minWidth: 0 }}>
               <div className="tt">{name}</div>
-              <div className="ss">{item ? stateWord(item) : rest ? t('A day off before the next one') : r ? exCount(r.ex.length) : ''}</div>
+              <div className="ss">{item ? stateWord(item) : rest ? t('A day off before the next one') : r ? isVisitRoutine(r) ? t('Visit') : exCount(r.ex.length) : ''}</div>
             </div>
             {r && !rest && !editing && <MiniBodyMap routines={[r]} body={S.body} />}
             {editing && seq.length > 1 && <button className="plan-handle" aria-label={t('Move {0}', name)} title={t('Drag to reorder')}
@@ -423,6 +424,11 @@ function Routines({ S, update, nav }) {
     update(s => { s.routines.push(r) })
     nav('/plan/r/' + r.id)
   }
+  const addVisit = () => {
+    const r = { id: uid(), name: t('New visit'), emoji: 'stretch', kind: 'visit', ex: [] }
+    update(s => { s.routines.push(r) })
+    nav('/plan/r/' + r.id)
+  }
   // The same delete as RoutineEdit's "Delete routine" button (lib/routines.js), with an Undo in
   // place of its confirm (v1.3.11): the swipe and the edit-mode minus both land here.
   const remove = r => deleteRoutineWithUndo(r.id)
@@ -444,14 +450,17 @@ function Routines({ S, update, nav }) {
   // The weekdays a routine is on, short, in the order the week runs.
   const order = weekOrder(weekStartOf(S))
   const daysOf = id => order.filter(d => [].concat(S.week[d] || []).includes(id)).map(d => t(DAYS[d]))
-  const sub = r => [exCount(r.ex.length), daysOf(r.id).join(', ')].filter(Boolean).join(' · ')
+  const sub = r => [isVisitRoutine(r) ? t('Visit') : exCount(r.ex.length), daysOf(r.id).join(', ')].filter(Boolean).join(' · ')
 
   return <>
     <div className="row between plan-sec-h plan-routines-bar">
       {routines.length > 0
         ? <button className="plan-textbtn" aria-pressed={edit} onClick={() => setEdit(e => !e)}>{edit ? t('Done') : t('Edit')}</button>
         : <span />}
-      <Button size="sm" variant="tinted" icon="plus" onClick={addRoutine}>{t('New routine')}</Button>
+      <div className="row" style={{ gap: 8 }}>
+        <Button size="sm" variant="tinted" icon="plus" onClick={addVisit}>{t('New visit')}</Button>
+        <Button size="sm" variant="tinted" icon="plus" onClick={addRoutine}>{t('New routine')}</Button>
+      </div>
     </div>
     {routines.length ? <>
       {edit

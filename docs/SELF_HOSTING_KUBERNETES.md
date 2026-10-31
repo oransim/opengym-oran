@@ -16,7 +16,7 @@ downloaded at start-up. There are only a few resources to create:
   works as well), plus a cert-manager Certificate for the hostname.
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym   # or https://gitlab.com/DuarteSantos8/opengym, same repo
+git clone https://github.com/oransim/openGym
 cd openGym
 # In kubernetes/deployment.yaml, set RP_ID and ORIGIN in spec.template.spec.containers[api].env
 # to your hostname, and the hostname in kubernetes/httproute.yaml.
@@ -35,13 +35,16 @@ Notes:
   called `eg` in `envoy-gateway-system` with an `https` listener; change both to match your
   cluster. The Gateway has to terminate TLS; this was tested with
   [Envoy Gateway](https://gateway.envoyproxy.io) and [cert-manager](https://cert-manager.io).
-- The images are the published `ghcr.io/duartesantos8/opengym-api` and `opengym-web`. The AI
-  Coach with an API key works on that same API image; the Claude and Codex sign-in providers
-  need the `coach` build target, which is not published, so build it yourself (see
-  [AI_COACH.md](AI_COACH.md)).
-- The images are pinned to a release (`1.4.3`), the API and the web image always to the same
-  one. To update, read the release notes, set the new version on both and apply again; pinning
-  to `latest` instead means a restarted pod can come back on a version you never chose.
+- The manifests use this fork's `ghcr.io/oransim/opengym-api:edge` and
+  `ghcr.io/oransim/opengym-web:edge`. GitHub Actions publishes both from `main`; wait for both
+  builds before starting or restarting the Deployment. A new fork needs Actions enabled, and
+  GHCR packages must be public for anonymous pulls (or the pod needs `imagePullSecrets`).
+  The AI Coach with an API key works on the
+  same API image; the Claude and Codex sign-in providers need the `coach` build target, which is
+  not published (see [AI_COACH.md](AI_COACH.md)).
+- `edge` moves with each push. After both images are published, run
+  `kubectl rollout restart deployment/opengym -n fitness` to use them. For a fixed deployment,
+  replace both tags with matching versioned tags from a release you publish in this fork.
 - Coming from a version before 1.4.0: the `media-download` initContainer and the `opengym-media`
   PVC are gone, since the media now ship in the web image. Once the new pod runs, delete the old
   claim with `kubectl delete pvc opengym-media -n fitness` (`kubectl apply -k` leaves it in place).

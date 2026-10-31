@@ -116,6 +116,6 @@ describe('Plan — the menu', () => {
     expect(item('Export plan file').disabled).toBe(true)
     expect(item('Print / Save as PDF').disabled).toBe(true)
     expect(item('Import a plan file').disabled).toBeFalsy()
-    expect(menu.subtitle).toContain('Add an exercise to a routine first')
+    expect(menu.subtitle).toContain('Add exercises to a routine or create a visit first')
   })
 })

@@ -266,6 +266,15 @@ beforeEach(() => {
   mocks.headerHeight = 0
 })
 
+it('shows an exercise-free class visit as a timed visit with a finish action', async () => {
+  await mount([], 0, { active: { name: 'Yoga', kind: 'visit', routineIds: ['yoga'] } })
+  expect(container.textContent).toContain('Visit in progress')
+  expect(container.textContent).not.toContain('Freestyle workout')
+  expect(container.textContent).not.toContain('0/0 sets')
+  const finish = [...container.querySelectorAll('button')].find(b => b.textContent.trim() === 'Finish visit')
+  expect(finish).toBeTruthy()
+})
+
 it('edits a saved set without running live completion, rest or success feedback', async () => {
   await mount([exercise('plain-bench', [false], {
     plan: { policy: 'linear', kind: 'first', why: ['Nothing logged yet, so this session sets the baseline.'] },

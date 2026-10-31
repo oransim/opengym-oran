@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPlanBundle, mergePlan, parsePlan } from './plan-share.js'
+import { buildPlanBundle, mergePlan, parsePlan, planPrintHTML } from './plan-share.js'
 
 // There was no test file for plan sharing at all, which is how a whole prescription field
 // went missing without anyone noticing.
@@ -10,6 +10,20 @@ const stateWith = ex => ({
 const roundTrip = ex => parsePlan(JSON.stringify(buildPlanBundle(stateWith(ex), 'Plan'))).routines[0].ex[0]
 
 describe('plan-share units', () => {
+  it('preserves an exercise-free visit and its scheduled day across export and import', () => {
+    const source = { unit: 'kg', customEx: [], week: { 2: ['yoga'] }, routines: [{ id: 'yoga', name: 'Yoga', kind: 'visit', emoji: 'stretch', ex: [] }] }
+    const parsed = parsePlan(buildPlanBundle(source, 'Classes'))
+    expect(parsed.routines).toMatchObject([{ id: 'yoga', name: 'Yoga', kind: 'visit', ex: [] }])
+    expect(parsed.week[2]).toEqual(['yoga'])
+    const target = { unit: 'kg', customEx: [], week: {}, routines: [] }
+    mergePlan(target, parsed, { schedule: true })
+    expect(target.routines).toMatchObject([{ name: 'Yoga', kind: 'visit', ex: [] }])
+    expect(target.week[2]).toEqual([target.routines[0].id])
+    const printed = planPrintHTML(source, '')
+    expect(printed).toContain('Yoga')
+    expect(printed).not.toContain('No routines yet.')
+    expect(printed).not.toContain('No exercises yet.')
+  })
   it('exports a unit and converts every load prescription at the import boundary', () => {
     const source = {
       unit: 'kg', week: {}, customEx: [],

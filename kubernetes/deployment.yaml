@@ -18,12 +18,10 @@ spec:
     spec:
       containers:
         - name: api
-          # Pin both images to one release and move them together: a tag names what you run and
-          # what you roll back to, where :latest changes under a pod whenever it is rescheduled.
-          # The API and the web image of one version belong together. The published tags are
-          # the version (1.4.3) and its minor line (1.4); see the release notes before a bump.
-          image: ghcr.io/duartesantos8/opengym-api:1.4.3
-          imagePullPolicy: IfNotPresent
+          # Both images are built from this fork's main branch by docker-publish.yml.
+          # They share the moving edge tag; restart the Deployment after publishing a new build.
+          image: ghcr.io/oransim/opengym-api:edge
+          imagePullPolicy: Always
           env:
             - name: PORT
               value: "3000"
@@ -64,8 +62,8 @@ spec:
             limits:
               memory: 512Mi
         - name: web
-          image: ghcr.io/duartesantos8/opengym-web:1.4.3   # same version as the api container
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/oransim/opengym-web:edge   # same build as the api container
+          imagePullPolicy: Always
           env:
             # Not the image's default 80: the image runs as uid 101, which can bind a port below
             # 1024 only where the runtime sets net.ipv4.ip_unprivileged_port_start=0 (Docker

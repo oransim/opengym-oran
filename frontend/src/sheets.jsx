@@ -1280,7 +1280,7 @@ function AddToRoutine({ ex, close }) {
     <h3 className={exerciseNameClass(ex)}>{t('Add “{0}”', exerciseNameFor(ex))}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Pick a routine. Sets, reps and weight come next.')}</div>
     <div className="list">
-      {st.routines.map(r => <div key={r.id} className="item" {...tappable(() => pick(r.id))}>
+      {st.routines.filter(r => r.kind !== 'visit').map(r => <div key={r.id} className="item" {...tappable(() => pick(r.id))}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
         {r.ex.some(e => e.id === ex.id) && <span className="tag">{t('already in')}</span>}<Icon name="plus" className="chev" />
@@ -2480,7 +2480,7 @@ export const effortPickerSheet = (kind, value, onPick, { cardio = false } = {}) 
 
 /* ============================ share / print / import a plan ============================ */
 // What the Plan menu does with a plan: export it, print it, import a friend's.
-export const planHasRoutines = st => (st.routines || []).some(r => r.ex && r.ex.length)
+export const planHasRoutines = st => (st.routines || []).some(r => r.kind === 'visit' || (r.ex && r.ex.length))
 export async function exportPlanFile() {
   const st = S(), user = useStore.getState().user
   const bundle = buildPlanBundle(st, user?.name ? t('{0}’s plan', user.name) : '')
@@ -2588,7 +2588,7 @@ function DayOverride({ iso, close }) {
   }
   const row = r => <div key={r.id} className="item" {...tappable(() => set(r.id))}>
     <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-    <div className="grow"><div className="tt">{r.name}</div><div className="ss">{pinnedOn[r.id] && pinnedOn[r.id] !== iso ? fmtDate(pinnedOn[r.id], true) : exCount(r.ex.length)}</div></div>
+    <div className="grow"><div className="tt">{r.name}</div><div className="ss">{pinnedOn[r.id] && pinnedOn[r.id] !== iso ? fmtDate(pinnedOn[r.id], true) : r.kind === 'visit' ? t('Visit') : exCount(r.ex.length)}</div></div>
     {effIds.includes(r.id) && <Icon name="check" className="accent" />}</div>
   return <>
     <h3>{fmtDate(iso, true)}</h3>
@@ -2675,7 +2675,7 @@ function DayAssign({ day, close }) {
         const on = cur.includes(r.id)
         return <div key={r.id} className="item menu-item" aria-pressed={on} {...tappable(() => toggle(r.id))}>
           <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-          <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+          <div className="grow"><div className="tt">{r.name}</div><div className="ss">{r.kind === 'visit' ? t('Visit') : exCount(r.ex.length)}</div></div>
           <span className={'menu-on' + (on ? ' is-on' : '')}><Icon name="check" /></span>
         </div>
       })}
@@ -2851,7 +2851,7 @@ function WorkoutDetail({ w, close }) {
   const grouped = groups.length > 1 || (groups[0] && groups[0].rid && (w.routineIds || []).length > 1)
   return <>
     <h3>{w.name}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(sessionVolume(w, st), st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), ...(w.kind === 'visit' ? [t('Visit')] : [fmtVol(sessionVolume(w, st), st.unit)]), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
     {grouped ? groups.map(g => {
       const r = g.rid ? st.routines.find(x => x.id === g.rid) : null
       const items = g.items.map(i => w.entries[i])
@@ -2877,7 +2877,7 @@ function WorkoutDetail({ w, close }) {
     {st.active && <p className="small muted">{t('Finish the current workout first.')}</p>}
     {/* The editor starts from the record as it is, so a note typed here goes in first — the same
         flush the date row does, and the unmount hook then has nothing left to write over it. */}
-    <Button icon="pencil" disabled={!!st.active} onClick={() => {
+    {w.kind !== 'visit' && <><Button icon="pencil" disabled={!!st.active} onClick={() => {
       saveNote()
       initial.current = latest.current.trim().slice(0, NOTE_MAX)
       try { update(state => { editCompletedSession(state, w) }); closeThenNav(close, '/workout') }
@@ -2890,7 +2890,7 @@ function WorkoutDetail({ w, close }) {
       saveNote()
       initial.current = latest.current.trim().slice(0, NOTE_MAX)
       repeatWorkout(w, close)
-    }}>{t('Repeat today')}</Button>
+    }}>{t('Repeat today')}</Button></>}
     {/* The note lives in a textarea that only writes on blur, and moving the workout re-keys a
         legacy record — so flush it first and stop the unmount hook writing it a second time. */}
     <Button icon="calendar" style={{ marginBottom: 8 }} onClick={() => {
@@ -2903,7 +2903,7 @@ function WorkoutDetail({ w, close }) {
       initial.current = latest.current.trim().slice(0, NOTE_MAX)
       workoutDurationSheet(w, close)
     }}>{t('Change duration')}</Button>
-    <Button icon="plus" onClick={() => confirmSheet({
+    {w.kind !== 'visit' && <><Button icon="plus" onClick={() => confirmSheet({
       title: t('Save as routine?'),
       message: t('Create an independent routine from these exercise targets. Your workout history is kept.'),
       confirmText: t('Save'),
@@ -2923,7 +2923,7 @@ function WorkoutDetail({ w, close }) {
     {/* On paper: every exercise and every set, the browser's print dialog or the phone's print sheet. */}
     <Button icon="note" onClick={saveAsPdf}>{t('Save as PDF')}</Button>
     <div style={{ height: 8 }} />
-    <Button icon="download" onClick={exportFit}>{t('Export as .fit file')}</Button>
+    <Button icon="download" onClick={exportFit}>{t('Export as .fit file')}</Button></>}
     <div style={{ height: 10 }} />
     {/* Matched the way the edits above are, not by id: a workout from before ids has none, and
         filtering on `x.id !== undefined` took every other one of them with it. */}
@@ -3089,7 +3089,7 @@ export function WorkoutRow({ w, onClick }) {
   return <div className="item" {...tappable(onClick)}>
     <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 19 }}><Icon name={glyph} /></span>
     <div className="grow"><div className="tt">{w.name}</div>
-      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), tn('{0} set', '{0} sets', setsDone(w)), fmtVol(sessionVolume(w, st), st.unit)].join(' · ')}</div></div>
+      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), ...(w.kind === 'visit' ? [t('Visit')] : [tn('{0} set', '{0} sets', setsDone(w)), fmtVol(sessionVolume(w, st), st.unit)])].join(' · ')}</div></div>
     {mediaN > 0 && <span className="wrow-media" title={tn('{0} photo or video', '{0} photos or videos', mediaN)} aria-label={tn('{0} photo or video', '{0} photos or videos', mediaN)}><Icon name="image" />{mediaN}</span>}
     {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}
     <Icon name="chevronRight" className="chev" />
@@ -3110,6 +3110,8 @@ export function DayNoteRow({ iso, note }) {
 // `routineIds` accepts `string | string[] | null` — `[r.id]` for one routine,
 // `effectiveRoutineIds(...)` for today's planned session, `[]` / null for explicit freestyle.
 export function startFlow(routineIds) {
+  const selected = [].concat(routineIds ?? []).map(id => S().routines.find(r => r.id === id)).filter(Boolean)
+  if (selected.length === 1 && selected[0].kind === 'visit') { beginWorkout(routineIds, null); return }
   // The weigh-in is a setting (Settings → During a workout, issue #137): off goes straight
   // into the session with no body weight on it, same as "Start without weighing in".
   if (S().weighIn === false) { beginWorkout(routineIds, null); return }
@@ -3127,6 +3129,7 @@ export function beginWorkout(routineIds, bw, { id = null, start = null } = {}) {
       // A session tracks its routines as a list; per-entry `rid` carries which one each
       // exercise came from. No top-level `excludeFromProgression` — per-entry `noProg` does it.
       routineIds: rids,
+      ...(routines.length === 1 && routines[0].kind === 'visit' ? { kind: 'visit' } : {}),
       name: routines.length ? deriveSessionName(routines.map(r => r.name)) : t('Freestyle'),
       bw: bw || null, cur: 0, entries,
       // Snapshot the layout at start so the header ⋮ can change it for this session only —
@@ -3258,6 +3261,7 @@ function beginBackfill({ iso, time, durationMin, routineIds, replaceId }) {
     s.active = {
       id: uid(), d: iso, start,
       routineIds: rids,
+      ...(routines.length === 1 && routines[0].kind === 'visit' ? { kind: 'visit' } : {}),
       name: routines.length ? deriveSessionName(routines.map(r => r.name)) : t('Freestyle'),
       bw: null, cur: 0, entries,
       backfill: { durationMin, replaceId: replaceId || null },
@@ -3678,22 +3682,24 @@ function FinishSummary({ w, prs, e1prs = [], additions = [], close }) {
     {/* Sticky, so the summary can be left from the top however far it has been scrolled. */}
     <div className="fin-x"><button type="button" className="iconbtn" aria-label={t('Close')} onClick={() => closeThenNav(close, '/home')}><Icon name="xmark" /></button></div>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)', position: 'relative' }}><Icon name="trophy" /><SeasonDeco spot="finish" workout /></div>
-    <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
+    <h3 style={{ margin: '8px 0' }}>{w.kind === 'visit' ? t('Visit complete!') : t('Workout complete!')}</h3>
     <div className="tiles fin" style={{ textAlign: 'start' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
+      {w.kind !== 'visit' && <>
       <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(sessionVolume(w, st), st.unit)}</div></div>
       <div className="tile wide"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsWorkCount(setsDone(w), workSetsDone(w))}</div></div>
       <div className="tile narrow"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{prs.length || '–'}</div></div>
+      </>}
     </div>
     {(prs.length > 0 || e1prs.length > 0) && <div style={{ textAlign: 'start', marginBottom: 12 }}>
       {prs.map(id => <div key={id} className="small accent row" style={{ gap: 6, alignItems: 'flex-start' }}><Icon name="trophy" style={{ fontSize: 13, marginTop: 2, flex: 'none' }} /><span>{t('New PR:')} <span className={exerciseNameClass(EXIDX[id])}>{EXIDX[id] ? exerciseNameFor(EXIDX[id]) : id}</span></span></div>)}
       {e1prs.map(p => <div key={p.id} className="small accent row" style={{ gap: 6, alignItems: 'flex-start' }}><Icon name="chartLine" style={{ fontSize: 13, marginTop: 2, flex: 'none' }} /><span>{t('Best estimated 1RM:')} <span className={exerciseNameClass(EXIDX[p.id])}>{EXIDX[p.id] ? exerciseNameFor(EXIDX[p.id]) : p.id}</span> · {fmtNum(p.est)} {st.unit}</span></div>)}
     </div>}
-    <h4 className="sec" style={{ textAlign: 'start' }}>{t('What you just trained')}</h4>
+    {w.kind !== 'visit' && <><h4 className="sec" style={{ textAlign: 'start' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />
-    <div style={{ height: 14 }} />
-    <LastAndNext st={st} w={w} />
-    <CardioDone st={st} w={w} />
+    <div style={{ height: 14 }} /></>}
+    {w.kind !== 'visit' && <><LastAndNext st={st} w={w} />
+    <CardioDone st={st} w={w} /></>}
     <KeepInRoutine additions={additions} />
     {/* The moment for a progress photo or the clip of a set: the workout is already saved, so
         what is added here goes straight onto its record. */}
@@ -3707,7 +3713,7 @@ export function finishWorkout() {
   if (!A) return
   const done = setsDoneActive(A)
   const total = setUnitsTotal(A.entries)
-  if (!done) { confirmSheet({ title: t('Nothing logged yet'), message: t('You haven’t checked off any sets. Finish the workout anyway?'), confirmText: t('Finish anyway'), onConfirm: doFinishWorkout }); return }
+  if (!done && A.kind !== 'visit') { confirmSheet({ title: t('Nothing logged yet'), message: t('You haven’t checked off any sets. Finish the workout anyway?'), confirmText: t('Finish anyway'), onConfirm: doFinishWorkout }); return }
   if (done < total) { confirmSheet({ title: t('Finish early?'), message: tn('{0} set still unchecked. Finish the workout now?', '{0} sets still unchecked. Finish the workout now?', total - done), confirmText: t('Finish workout'), onConfirm: doFinishWorkout }); return }
   doFinishWorkout()
 }
@@ -3722,8 +3728,8 @@ export function finishWorkoutSheet({ onDiscard } = {}) {
   const done = setsDoneActive(A)
   const total = setUnitsTotal(A.entries)
   menuSheet({
-    title: !done ? t('Nothing logged yet') : done < total ? t('Finish early?') : t('Finish workout?'),
-    subtitle: !done ? t('You haven’t checked off any sets. Finish the workout anyway?')
+    title: A.kind === 'visit' ? t('Finish visit?') : !done ? t('Nothing logged yet') : done < total ? t('Finish early?') : t('Finish workout?'),
+    subtitle: A.kind === 'visit' ? t('Save this visit and its elapsed time to history?') : !done ? t('You haven’t checked off any sets. Finish the workout anyway?')
       : done < total ? tn('{0} set still unchecked. Finish the workout now?', '{0} sets still unchecked. Finish the workout now?', total - done) : null,
     sections: [
       { items: [{ icon: 'flag', accent: true, label: t('Finish and save'), onClick: doFinishWorkout }] },

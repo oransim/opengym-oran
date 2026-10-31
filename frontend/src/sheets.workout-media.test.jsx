@@ -257,4 +257,21 @@ describe('a workout\'s photos and videos', () => {
     expect(row.querySelector('.wrow-media').textContent).toBe('2')
     expect(row.querySelector('.wrow-media').getAttribute('aria-label')).toBe('2 photos or videos')
   })
+
+  it('labels a class visit by its duration without zero sets or volume', () => {
+    const row = render(<WorkoutRow w={workout({ name: 'Yoga', kind: 'visit', entries: [], start: 1000, end: 3601000 })} onClick={() => {}} />)
+    expect(row.textContent).toContain('Yoga')
+    expect(row.textContent).toContain('1h 0m')
+    expect(row.textContent).not.toContain('0 sets')
+    expect(row.textContent).not.toContain('0 kg')
+  })
+
+  it('shows a visit in history details without workout-only statistics', () => {
+    workoutDetailSheet(workout({ name: 'Climbing gym', kind: 'visit', entries: [], start: 1000, end: 3601000 }))
+    const detail = renderTop()
+    expect(detail.textContent).toContain('Climbing gym')
+    expect(detail.textContent).toContain('1h 0m')
+    expect(detail.textContent).not.toContain('0 kg')
+    expect(detail.textContent).not.toContain('Repeat today')
+  })
 })

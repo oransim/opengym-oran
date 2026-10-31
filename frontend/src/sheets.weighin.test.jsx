@@ -39,4 +39,11 @@ describe('the weigh-in before a workout is a setting', () => {
     expect(active.bw).toBeNull()
     expect(active.routineIds).toEqual([])
   })
+
+  it('starts a class visit without a weigh-in even when workout weigh-ins are enabled', () => {
+    useStore.setState(s => ({ S: { ...s.S, routines: [{ id: 'yoga', name: 'Yoga', kind: 'visit', ex: [] }] } }))
+    act(() => startFlow(['yoga']))
+    expect(useUI.getState().sheets).toHaveLength(0)
+    expect(useStore.getState().S.active).toMatchObject({ name: 'Yoga', kind: 'visit', bw: null })
+  })
 })

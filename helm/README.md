@@ -13,7 +13,7 @@ Read [docs/SELF_HOSTING.md](../docs/SELF_HOSTING.md) first. The passkey requirem
 ## Install
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym
+git clone https://github.com/oransim/openGym
 cd openGym
 
 helm install opengym ./helm -n fitness --create-namespace \
@@ -34,6 +34,13 @@ helm test opengym -n fitness          # calls /api/health through the web contai
 ```
 
 Pods restart on their own when the ConfigMap or Secret changes.
+The default API and web images are published from this fork's `main` branch as `:edge` by
+`.github/workflows/docker-publish.yml`. After a new image build finishes, restart the Deployment
+to use it: `kubectl rollout restart deployment/opengym -n fitness`. Both images must come from
+the same source revision.
+On a new GitHub fork, enable Actions in the repository's Actions tab before expecting images.
+GHCR may initially make new packages private; make both packages public for anonymous cluster
+pulls, or configure Kubernetes `imagePullSecrets` for a private deployment.
 
 ## Exposing it
 

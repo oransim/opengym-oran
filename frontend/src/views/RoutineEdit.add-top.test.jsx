@@ -20,9 +20,9 @@ import { EXIDX } from '../lib/exercises.js'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, host
 
-function mount(ex) {
+function mount(ex, kind) {
   const S = JSON.parse(JSON.stringify(DEF))
-  S.routines = [{ id: 'r1', name: 'Push day', emoji: 'dumbbell', ex }]
+  S.routines = [{ id: 'r1', name: 'Push day', emoji: 'dumbbell', ...(kind ? { kind } : {}), ex }]
   useStore.setState({ S, user: null })
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -36,6 +36,13 @@ beforeEach(() => { vi.clearAllMocks() })
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
 describe('RoutineEdit — Add exercise at the top', () => {
+  it('lets a visit be named without showing exercise or progression controls', () => {
+    mount([], 'visit')
+    expect(host.querySelector('input')?.value).toBe('Push day')
+    expect(host.textContent).toContain('Gym or class visit')
+    expect(addButton()).toBeUndefined()
+    expect(host.textContent).not.toContain('Progression')
+  })
   it('sits above the first exercise, with the list heading', () => {
     mount([{ id: '0025', sets: 3, mode: 'reps', reps: 5, weight: 80 }, { id: '0025', sets: 3, mode: 'reps', reps: 8, weight: 60 }])
     const add = addButton()

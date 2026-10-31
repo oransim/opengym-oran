@@ -71,7 +71,7 @@ function StartChooser() {
     {todayRoutines.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
       <h2 className="accent">{t("Today's plan")}{todayOvr ? ' · ' + t('rescheduled') : ''}</h2>
       <div className="row between" style={{ marginBottom: 12 }}>
-        <div><div className="big">{todayName}</div><div className="muted small">{exCount(todayRoutines.reduce((n, r) => n + r.ex.length, 0))}</div></div>
+        <div><div className="big">{todayName}</div><div className="muted small">{todayRoutines.length === 1 && todayRoutines[0].kind === 'visit' ? t('Visit') : exCount(todayRoutines.reduce((n, r) => n + r.ex.length, 0))}</div></div>
         <span className="lrow-i" style={{ width: 38, height: 38, borderRadius: 9, fontSize: 22 }}><Icon name={glyphOf(todayRoutines[0].emoji)} /></span>
       </div>
       <Button variant="primary" icon="play" onClick={() => startFlow(todayIds)}>{t('Start {0}', todayName)}</Button>
@@ -79,7 +79,7 @@ function StartChooser() {
     {others.length > 0 && <><h4 className="sec">{t('Other routines')}</h4>
       <div className="list">{others.map(r => <div key={r.id} className="item" onClick={() => startFlow([r.id])}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{r.kind === 'visit' ? t('Visit') : exCount(r.ex.length)}</div></div>
         <span className="tag acc">{t('Start')}</span></div>)}</div></>}
     <div style={{ height: 14 }} />
     <Button icon="shuffle" onClick={() => startFlow([])}>{t('Freestyle workout (pick as you go)')}</Button>
@@ -1572,21 +1572,21 @@ function ActiveWorkout() {
   // the saved one.
   const openViewMenu = () => menuSheet({
     sections: [
-      { items: [
+      { items: A.kind === 'visit' ? [] : [
         { icon: 'gear', accent: true, chevron: true, label: t('Workout settings'),
           sub: [S.restSec > 0 ? t('{0} rest', fmtRest(S.restSec)) : t('No rest timer'), S.sound ? t('Sound') : t('Silent')].join(' · '),
           onClick: workoutSettingsSheet },
       ] },
-      { title: t('Add'), items: [
+      { title: t('Add'), items: A.kind === 'visit' ? [] : [
         { icon: 'plusCircle', label: t('Add exercise'), onClick: addExercise },
         !editing && { icon: 'clipboard', label: t('Add routine'), sub: t('Bring another routine into this session'), onClick: addRoutineToSessionSheet },
       ] },
       { title: t('This workout'), items: [
         A.backfill && A.entries.length > 0 && { icon: 'checkCircle', label: t('Mark all sets done'), onClick: markAllDone },
-        { icon: 'pencil', label: t('Rename workout'), onClick: renameWorkoutSheet },
-        { icon: 'layout', label: t('Layout'), sub: LAYOUT_LABEL[workoutView] || LAYOUT_LABEL.cards, onClick: openLayoutMenu },
+        A.kind !== 'visit' && { icon: 'pencil', label: t('Rename workout'), onClick: renameWorkoutSheet },
+        A.kind !== 'visit' && { icon: 'layout', label: t('Layout'), sub: LAYOUT_LABEL[workoutView] || LAYOUT_LABEL.cards, onClick: openLayoutMenu },
         { icon: 'note', label: A.note ? t('Edit session note') : t('Add session note'), onClick: sessionNoteSheet },
-        noProgSwitchable && { icon: 'chartLineSlash', label: t('Don’t count for progression'), sub: t('Every exercise in this workout'), on: sessionNoProg(A), onClick: toggleSessionNoProg },
+        A.kind !== 'visit' && noProgSwitchable && { icon: 'chartLineSlash', label: t('Don’t count for progression'), sub: t('Every exercise in this workout'), on: sessionNoProg(A), onClick: toggleSessionNoProg },
       ] },
     ],
   })
@@ -2160,16 +2160,16 @@ function ActiveWorkout() {
       {editing
         ? <button className="iconbtn" aria-label={t('Close editor')} title={t('Close editor')} onClick={() => exitWorkoutEdit()}><Icon name="xmark" /></button>
         : <button className="iconbtn" aria-label={t('Minimize')} title={t('Minimize')} onClick={() => nav('/home')}><Icon name="chevronDown" /></button>}
-      <div className="whdr-mid"><div className="whdr-name">{A.name}</div><div className="sub">{(A.backfill || editing) ? fmtDate(A.d, true) : <Elapsed start={A.start} />} · {t('{0} sets', done + '/' + total)}</div></div>
+      <div className="whdr-mid"><div className="whdr-name">{A.name}</div><div className="sub">{(A.backfill || editing) ? fmtDate(A.d, true) : <Elapsed start={A.start} />}{A.kind === 'visit' ? '' : ' · ' + t('{0} sets', done + '/' + total)}</div></div>
       {!chipRow && sessionMap}
       <button className="iconbtn" aria-label={t('Workout options')} title={t('Workout options')} onClick={openViewMenu}><Icon name="more" /></button>
       <button className="btn primary pill whdr-finish" aria-label={editing ? t('Save changes') : undefined}
-        onClick={() => (editing ? finishWorkout() : finishWorkoutSheet({ onDiscard: discardWorkout }))}>{editing ? t('Save') : t('Finish')}</button>
+        onClick={() => (editing ? finishWorkout() : finishWorkoutSheet({ onDiscard: discardWorkout }))}>{editing ? t('Save') : A.kind === 'visit' ? t('Finish visit') : t('Finish')}</button>
     </div>
     {/* The volume so far rides at the end of the progress bar (#774): one line that never wraps,
         so a growing number cannot reflow the header the way a third item in the line above did
         on a 320 px phone. */}
-    {weighable
+    {A.kind === 'visit' ? null : weighable
       ? <div className="wprog-row"><div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
         <span className="wvol" data-session-volume>{fmtVol(vol, S.unit)}</span></div>
       : <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>}
@@ -2288,17 +2288,17 @@ function ActiveWorkout() {
         <ExerciseBlock entryIdx={cur} onPairPrev={onPairPrev} onPairNext={onPairNext} {...blockProps(cur)} />
       )}
       </SwipeCards>
-    </>) : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout. Add your first exercise and off you go.')}</div>}
+    </>) : <div className="empty"><div className="ico"><Icon name={A.kind === 'visit' ? 'calendar' : 'shuffle'} /></div>{A.kind === 'visit' ? t('Visit in progress. Finish when you leave to save the time spent.') : t('Freestyle workout. Add your first exercise and off you go.')}</div>}
 
     <div style={{ height: 12 }} />
-    {!listMode && <div className="row">
+    {A.kind !== 'visit' && !listMode && <div className="row">
       <Button icon="chevronLeft" disabled={unitIdx <= 0} onClick={() => navigateUnit(-1)}>{t('Prev')}</Button>
       <Button trailingIcon="chevronRight" disabled={unitIdx < 0 || unitIdx >= units.length - 1} onClick={() => navigateUnit(1)}>{t('Next')}</Button>
     </div>}
-    {!listMode && <div style={{ height: 10 }} />}
+    {A.kind !== 'visit' && !listMode && <div style={{ height: 10 }} />}
     {wc.exerciseButtons && listMode && A.entries.length > 0 && <div className="muted small" style={{ marginBottom: 6 }}>{t('Move, swap and remove below act on the exercise marked {0}.', t('Current'))}</div>}
-    <Button onClick={addExercise} icon="plus">{t('Add exercise')}</Button>
-    {wc.exerciseButtons && A.entries.length > 0 && <>
+    {A.kind !== 'visit' && <Button onClick={addExercise} icon="plus">{t('Add exercise')}</Button>}
+    {A.kind !== 'visit' && wc.exerciseButtons && A.entries.length > 0 && <>
       <div style={{ height: 6 }} />
       <div className="row">
         <Button size="sm" icon="chevronUp" aria-label={t('Move up')}
@@ -2327,8 +2327,8 @@ function ActiveWorkout() {
     {(() => {
       const exDone = A.entries.filter(e => e.sets.length && e.sets.every(s => s.done)).length
       const allDone = A.entries.length > 0 && exDone === A.entries.length
-      return <button className={allDone ? 'btn primary' : 'btn ghost dim'} onClick={finishWorkout}>
-        {editing ? t('Save changes') : allDone ? t('Finish workout') : t('Finish workout early · {0} exercises', exDone + '/' + A.entries.length)}
+      return <button className={allDone || A.kind === 'visit' ? 'btn primary' : 'btn ghost dim'} onClick={finishWorkout}>
+        {editing ? t('Save changes') : A.kind === 'visit' ? t('Finish visit') : allDone ? t('Finish workout') : t('Finish workout early · {0} exercises', exDone + '/' + A.entries.length)}
       </button>
     })()}
     <div className="workout-end-spacer" />

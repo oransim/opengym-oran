@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { beginWorkout } from './sheets.jsx'
+import { beginWorkout, finishWorkout } from './sheets.jsx'
 import { EXDB } from './lib/exercises.js'
 import { DEF, useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
@@ -65,5 +65,14 @@ describe('beginWorkout with a routine-id list', () => {
   it('drops an unknown id and de-dupes a repeat (first wins)', () => {
     act(() => beginWorkout(['core', 'gone', 'core'], null))
     expect(useStore.getState().S.active.routineIds).toEqual(['core'])
+  })
+
+  it('starts and finishes a visit as timed history without exercise sets', () => {
+    useStore.getState().update(s => { s.routines.push({ id: 'yoga', name: 'Yoga', kind: 'visit', ex: [] }) })
+    act(() => beginWorkout(['yoga'], null))
+    expect(useStore.getState().S.active).toMatchObject({ name: 'Yoga', kind: 'visit', entries: [] })
+    act(() => finishWorkout())
+    expect(useStore.getState().S.active).toBeNull()
+    expect(useStore.getState().S.workouts.at(-1)).toMatchObject({ name: 'Yoga', kind: 'visit', routineIds: ['yoga'], entries: [] })
   })
 })

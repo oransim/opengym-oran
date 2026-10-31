@@ -58,4 +58,18 @@ describe('Plan — the day header counts its routines', () => {
     expect(countOn('Monday')).toBe('0 exercises')
     expect(countOn('Tuesday')).toBe('2 routines')
   })
+
+  it('creates a visit without exercises and shows it as a visit when scheduled', () => {
+    mount()
+    act(() => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === 'Routines')?.click())
+    const add = [...host.querySelectorAll('button')].find(b => b.textContent.trim() === 'New visit')
+    expect(add).toBeTruthy()
+    act(() => add.click())
+    const visit = mocks.S.routines.find(r => r.kind === 'visit')
+    expect(visit).toMatchObject({ name: 'New visit', ex: [] })
+    mocks.S.week[1] = [visit.id]
+    act(() => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === 'Schedule')?.click())
+    mount()
+    expect(countOn('Monday')).toBe('Visit')
+  })
 })

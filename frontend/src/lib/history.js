@@ -1,5 +1,6 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { syncSupersetMeta } from './superset-meta.js'
+import { routineHasContent } from './visit-routine.js'
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
 import { fmtSpeed } from './speed.js'
 import { hasIncline, inclineFrom } from './incline.js'
@@ -532,7 +533,7 @@ export function nextTrainingDay(S, iso) {
     d.setDate(d.getDate() + i)
     const nextIso = isoOf(d)
     const routines = effectiveRoutines(S, nextIso)
-    if (routines.some(r => (r.ex || []).length)) {
+    if (routines.some(routineHasContent)) {
       return { iso: nextIso, weekday: d.getDay(), routines, routine: routines[0] }
     }
   }

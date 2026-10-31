@@ -227,6 +227,7 @@ export function buildPlanBundle(S, name) {
   if (!unit) unitError()
   const routines = (S.routines || []).map(r => ({
     id: r.id, name: r.name, emoji: r.emoji,
+    ...(r.kind === 'visit' ? { kind: 'visit' } : {}),
     ...(r.prog ? { prog: r.prog } : {}),
     ...(r.excludeFromProgression === true ? { excludeFromProgression: true } : {}),
     ex: (r.ex || []).map(cleanEx)
@@ -344,6 +345,7 @@ export function mergePlan(s, bundle, { schedule } = {}) {
       id: nid,
       name: r.name || t('Shared routine'),
       emoji: r.emoji,
+      ...(r.kind === 'visit' ? { kind: 'visit' } : {}),
       ...(r.prog ? { prog: r.prog } : {}),
       ...(r.excludeFromProgression === true ? { excludeFromProgression: true } : {}),
       ex: (r.ex || []).map(e => ({ ...e, id: exIdMap[e.id] || canonicalExId(e.id) }))
@@ -455,7 +457,7 @@ function routineHTML(r, unit, { bare = false, speedUnit, ticks = false, lead = '
       : ''
     return `<div class="keep">${m.s(id)}${head}${body}${m.e(id)}</div>`
   })
-  if (!blocks.length) blocks.push(`<div class="keep">${lead}${bare ? '' : `<div class="r-head"><h2>${esc(r.name)}</h2></div>`}<div class="none">${esc(t('No exercises yet.'))}</div></div>`)
+  if (!blocks.length) blocks.push(`<div class="keep">${lead}${bare ? '' : `<div class="r-head"><h2>${esc(r.name)}</h2></div>`}<div class="none">${esc(t(r.kind === 'visit' ? 'Gym or class visit' : 'No exercises yet.'))}</div></div>`)
   return `<section class="routine">${blocks.join('')}</section>`
 }
 
@@ -515,13 +517,13 @@ export function planPrintHTML(S, owner, { routineId, probe = false } = {}) {
   const unit = S.unit || 'kg'
   const speedUnit = speedUnitOf(S)
   const single = routineId ? (S.routines || []).find(r => r.id === routineId) || null : null
-  const routines = routineId ? [single].filter(Boolean) : (S.routines || []).filter(r => r.ex && r.ex.length)
+  const routines = routineId ? [single].filter(Boolean) : (S.routines || []).filter(r => r.kind === 'visit' || (r.ex && r.ex.length))
   const lead = routineId ? '' : `<h3 class="sec-h">${esc(t('Routines'))}</h3>`
   const body = routines.length
     ? routines.map((r, i) => routineHTML(r, unit, { bare: !!single, speedUnit, ticks: !!single, lead: i === 0 ? lead : '', m, key: 'r' + i })).join('')
     : `<p class="none">${esc(t('No routines yet.'))}</p>`
   const title = single ? single.name : t('Weekly Training Plan')
-  const facts = single ? [exCount(single.ex.length)] : [routineCount(routines.length)]
+  const facts = single ? [single.kind === 'visit' ? t('Visit') : exCount(single.ex.length)] : [routineCount(routines.length)]
   return printShell({
     title, kicker: single ? t('Routine') : t('Training plan'), facts, owner, date: todayISO(),
     body: (routineId ? '' : weekHTML(S, m)) + body,

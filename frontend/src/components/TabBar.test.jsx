@@ -38,6 +38,16 @@ afterEach(() => {
 const tabs = () => [...host.querySelectorAll('#tabbar button')]
 
 describe('the tab bar across a store write', () => {
+  it('starts a visit scheduled for today from the Start tab', () => {
+    const onStart = vi.fn()
+    act(() => useStore.getState().update(s => {
+      s.routines = [{ id: 'yoga', name: 'Yoga', kind: 'visit', ex: [] }]
+      s.week = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map(d => [d, ['yoga']]))
+    }, false))
+    act(() => root.render(<TabBar onStart={onStart} />))
+    act(() => tabs()[2].click())
+    expect(onStart).toHaveBeenCalledWith(['yoga'])
+  })
   it('keeps the very same buttons instead of rebuilding them every tick', () => {
     act(() => { root.render(<TabBar onStart={() => {}} />) })
     const before = tabs()
