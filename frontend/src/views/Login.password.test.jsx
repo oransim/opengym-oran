@@ -62,15 +62,13 @@ describe('Login with password sign-in', () => {
     expect(buttons(noPasskeys)).not.toContain('Sign in with password')
   })
 
-  it('next to passkeys it is a second button, and the footer no longer says "no passwords"', () => {
+  it('shows the username and password form on the startup screen, with passkeys available', () => {
     mocks.config = { password_login: true, allow_guest: true }
     const page = mount(<Login />)
-    expect(buttons(page).slice(0, 3)).toEqual(['Sign in with passkey', 'Sign in with password', 'Create new profile'])
+    expect(page.querySelector('input[autocomplete="username"]')).toBeTruthy()
+    expect(page.querySelector('input[autocomplete="current-password"]')).toBeTruthy()
+    expect(buttons(page).slice(0, 3)).toEqual(['Sign in', 'Have a reset code from your admin?', 'Sign in with passkey'])
     expect(page.textContent).toContain('Passkeys use your fingerprint. A password works too, where passkeys do not.')
-    act(() => button(page, 'Sign in with password').click())
-    const sheet = mount(mocks.sheets[0](() => {}))
-    expect(sheet.querySelector('h3').textContent).toBe('Sign in with password')
-    expect(sheet.querySelector('input[autocomplete="current-password"]')).toBeTruthy()
   })
 
   it('a browser without passkeys gets a way in instead of "stay local"', () => {
@@ -79,7 +77,9 @@ describe('Login with password sign-in', () => {
     const page = mount(<Login />)
     expect(page.textContent).toContain("This browser doesn't support passkeys. Sign in with your name and password instead.")
     expect(page.textContent).not.toContain('Try a browser or device with passkey support.')
-    expect(buttons(page)).toEqual(['Sign in with password', 'Create new profile', 'Lost access?'])
+    expect(page.querySelector('input[autocomplete="username"]')).toBeTruthy()
+    expect(page.querySelector('input[autocomplete="current-password"]')).toBeTruthy()
+    expect(buttons(page)).toEqual(['Sign in', 'Have a reset code from your admin?', 'Create new profile', 'Lost access?'])
     // Creating a profile here can only mean a password: no passkey/password choice to make.
     act(() => button(page, 'Create new profile').click())
     const sheet = mount(mocks.sheets[0](() => {}))

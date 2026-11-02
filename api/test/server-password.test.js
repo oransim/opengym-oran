@@ -127,6 +127,7 @@ test('signs in with the right password, case-insensitively by profile name, like
   assert.ok(r.cookie);
   const raw = r.headers.getSetCookie().find(c => c.startsWith('gymsid='));
   assert.match(raw, /HttpOnly/); assert.match(raw, /SameSite=Lax/); assert.doesNotMatch(raw, /Secure/);
+  assert.match(raw, /Max-Age=7776000(?:;|$)/, 'a normal browser restart must keep the 90-day session');
   assert.equal((await h.req('GET', '/api/me', { cookie: r.cookie })).status, 200);
   assert.ok(h.audit().some(e => e.ev === 'auth.password.ok' && e.uid === 'u1'));
 });

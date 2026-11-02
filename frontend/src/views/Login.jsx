@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
 import { Button, Segmented } from '../components/ui.jsx'
 import { askAddDeviceData } from '../sheets.jsx'
-import { passwordOn, PasswordRegisterForm, openPasswordSignIn } from '../components/PasswordAuth.jsx'
+import { passwordOn, PasswordRegisterForm, PasswordSignInSheet } from '../components/PasswordAuth.jsx'
 import { openDeviceLinkRedeem } from '../components/Passkeys.jsx'
 import { openLostAccess } from '../components/LostAccess.jsx'
 
@@ -101,10 +101,17 @@ export default function Login() {
     <div className="narrow" style={wrap}>
       {head}
       <div className="muted" style={{ marginBottom: 34 }}>{t('Your workouts. Your weights. Your profile.')}</div>
-      {webauthnOK() ? <>
+      {pwOn ? <>
+        {!webauthnOK() && <div className="card small muted" style={{ textAlign: 'start', marginBottom: 14 }}>{t("This browser doesn't support passkeys. Sign in with your name and password instead.")}</div>}
+        <div className="card" style={{ textAlign: 'start' }}><PasswordSignInSheet close={() => {}} onPasskey={webauthnOK() ? signIn : null} /></div>
+        <div style={{ height: 10 }} />
+        <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>
+        {webauthnOK() && <><div style={{ height: 10 }} /><Button variant="ghost" className="dim" icon="qr" onClick={openDeviceLinkRedeem}>{t('Use a code from your other device')}</Button></>}
+        <Button variant="ghost" className="dim" onClick={openLostAccess}>{t('Lost access?')}</Button>
+        {canGuest && <div style={{ height: 4 }} />}
+      </> : webauthnOK() ? <>
         <Button variant="primary" icon="fingerprint" onClick={signIn}>{t('Sign in with passkey')}</Button>
         <div style={{ height: 10 }} />
-        {pwOn && <><Button icon="key" onClick={() => openPasswordSignIn()}>{t('Sign in with password')}</Button><div style={{ height: 10 }} /></>}
         <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>
         {/* Already signed in on another device: a code from there gives this one a passkey of
             its own (#95), instead of a new, empty profile. */}
@@ -113,15 +120,6 @@ export default function Login() {
         {/* No device signs you in any more (#584): what to try, and where a recovery code goes. */}
         <Button variant="ghost" className="dim" onClick={openLostAccess}>{t('Lost access?')}</Button>
         {canGuest && <div style={{ height: 4 }} />}
-      </> : pwOn ? <>
-        {/* Plain http on a LAN address, or a browser without passkey support: the password is
-            the way in, and the only way to create a profile from here. */}
-        <div className="card small muted" style={{ textAlign: 'start', marginBottom: 14 }}>{t("This browser doesn't support passkeys. Sign in with your name and password instead.")}</div>
-        <Button variant="primary" icon="key" onClick={() => openPasswordSignIn()}>{t('Sign in with password')}</Button>
-        <div style={{ height: 10 }} />
-        <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>
-        <Button variant="ghost" className="dim" onClick={openLostAccess}>{t('Lost access?')}</Button>
-        {canGuest && <div style={{ height: 10 }} />}
       </> : <div className="card small muted" style={{ textAlign: 'start' }}>{canGuest
         ? t("This browser doesn't do passkeys, but you can still use openGym locally on this device.")
         // Without passkeys and without the guest entrance there is no way in from this browser,
