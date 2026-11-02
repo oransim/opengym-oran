@@ -7,6 +7,7 @@ A personal, self-hosted fitness tracker for workouts and gym or class visits. Th
 - Create a gym or class visit, such as climbing, yoga, or Pilates, alongside exercise routines.
 - Put visits on the weekly plan or schedule a specific date.
 - Start a visit, see elapsed time, and finish it to save the duration in history.
+- Start and end a fast, see its elapsed time, and review completed fasts in history.
 - Keep exercises, custom photos, video URLs, routines, workouts, and history from openGym.
 
 The phone experience is the web app: open your HTTPS address in a browser and add it to the home screen. No separate mobile app or app-store release is needed for this setup.

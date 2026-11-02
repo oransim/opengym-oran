@@ -17,6 +17,7 @@ import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { dayNoteOf } from '../lib/day-notes.js'
 import { weighInAt } from '../lib/bodyweight.js'
+import { activeFast } from '../lib/fasting.js'
 import WeightRate from '../components/WeightRate.jsx'
 import { SeasonDeco } from '../components/Seasonal.jsx'
 
@@ -41,6 +42,7 @@ export default function Home() {
   // session in progress: the row takes you back to it as an edit, the way the tab bar does.
   const editingSaved = !!S.active?.editingWorkoutId
   const bw = lastBW(S)
+  const fasting = activeFast(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
 
@@ -162,6 +164,16 @@ export default function Home() {
         </Button>
       </div>}
       <SeasonDeco spot="home-hero" />
+    </div>
+
+    <div className="card tappable fasting-card" style={{ cursor: 'pointer' }} {...tappable(() => nav('/fasting'))}>
+      <div className="row between">
+        <div className="row" style={{ gap: 9 }}>
+          <span className="lrow-i" style={{ background: 'var(--orange)' }}><Icon name="timer" /></span>
+          <div><div className="lbl2">{t('Fasting')}</div><div className="ttl">{fasting ? t('Fast in progress') : t('Start a fast')}</div></div>
+        </div>
+        <Icon name="chevronRight" className="chev" />
+      </div>
     </div>
 
     {/* Jump to the gym check-in cards (QR membership codes). Shown here as a quick tap on

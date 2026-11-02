@@ -43,6 +43,15 @@ const mount = () => act(() => root.render(<Home />))
 const door = () => [...host.querySelectorAll('button')].find(b => b.textContent.includes('Choose a different workout'))
 
 describe('Home — the way to the Start screen when a plan already owns today', () => {
+  it('opens the fasting timer from its Home card', () => {
+    setS(); mount()
+    const card = host.querySelector('.fasting-card')
+    expect(card).not.toBeNull()
+    expect(card.textContent).toContain('Fasting')
+    act(() => card.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(nav).toHaveBeenCalledWith('/fasting')
+  })
+
   it('offers the door on a planned day, where the Start button would start the plan', () => {
     setS(); mount()
     expect(door()).toBeTruthy()

@@ -9,6 +9,16 @@ const clone = v => JSON.parse(JSON.stringify(v))
 function rng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296 } }
 
 describe('api/sync-stamps.js matches sync-merge.js', () => {
+  it('recognizes a fast entry stamp and does not stamp the whole fasting map as one setting', () => {
+    const cur = { _ts: 100, workouts: [], routines: [], fasts: { a: { id: 'a', start: 50, _ts: 100 } } }
+    expect(S.highestStamp(cur)).toBe(highestStamp(cur))
+    const next = clone(cur)
+    next.fasts.a.end = 150
+    next.fasts.a._ts = 150
+    S.stampPut(cur, next, { overRead: true, now: 150 })
+    expect(next.edited?.fasts).toBeUndefined()
+  })
+
   it('on random records and entries', () => {
     for (let seed = 1; seed < 300; seed++) {
       const R = rng(seed)
