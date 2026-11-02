@@ -834,7 +834,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">400</span>
-    <span class="p-desc">The password breaks the policy with <code>too-short</code> (under 10 characters), <code>too-long</code> (over 256) or <code>too-common</code>; a field is <code>missing</code>; or <code>email-invalid</code>: the <code>email</code> given is not an e-mail address.<span class="r-sig"><code>{&quot;error&quot;:&quot;this password is too easy to guess&quot;}</code> &middot; <code>{&quot;error&quot;:&quot;that is not an e-mail address&quot;}</code></span></span>
+    <span class="p-desc">The password breaks the length policy with <code>too-short</code> (under 6 characters) or <code>too-long</code> (over 256); a field is <code>missing</code>; or <code>email-invalid</code>: the <code>email</code> given is not an e-mail address.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password needs at least 6 characters&quot;}</code> &middot; <code>{&quot;error&quot;:&quot;that is not an e-mail address&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
@@ -991,7 +991,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">400</span>
-    <span class="p-desc">The new password breaks the policy (<code>too-short</code> under 10 characters, <code>too-long</code> over 256, or <code>too-common</code>), or a field is <code>missing</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;this password is too easy to guess&quot;}</code></span></span>
+    <span class="p-desc">The new password breaks the length policy (<code>too-short</code> under 6 characters or <code>too-long</code> over 256), or a field is <code>missing</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password needs at least 6 characters&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">401</span>

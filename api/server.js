@@ -1232,7 +1232,6 @@ const publicUser = u => ({ id: u.id, name: u.name, admin: isAdmin(u), ...(isOwne
 const POLICY_ERRORS = {
   'too-short': `the password needs at least ${MIN_LENGTH} characters`,
   'too-long': `the password can have at most ${MAX_LENGTH} characters`,
-  'too-common': 'this password is too easy to guess'
 };
 const policyError = (res, problem) => json(res, 400, { error: POLICY_ERRORS[problem], code: problem });
 const WRONG = { error: 'wrong name or password', code: 'bad-credentials' };

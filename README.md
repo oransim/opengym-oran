@@ -24,7 +24,7 @@ curl http://localhost:8080/api/health
 
 Open <http://localhost:8080> and create your profile. `docker compose up --build` builds both containers from this repository. The two planned prebuilt images are `ghcr.io/oransim/opengym-oran-api:edge` and `ghcr.io/oransim/opengym-oran-web:edge`; GitHub Actions is currently disabled, so those images have not been published.
 
-The sign-in screen accepts a profile name and password. If you already have a passkey profile, sign in with it once and add a password in **Settings → Account → Password**. Browser sessions use a persistent cookie and last 90 days by default, so reopening the app or a tab normally signs you in automatically. Signing out, clearing browser cookies, or using a private window ends that convenience.
+The sign-in screen accepts a profile name and password. Passwords need at least six characters, with no character-type rules. If you already have a passkey profile, sign in with it once and add a password in **Settings → Account → Password**. Browser sessions use a persistent cookie and last 90 days by default, so reopening the app or a tab normally signs you in automatically. Signing out, clearing browser cookies, or using a private window ends that convenience.
 
 ## Use it from your phone
 

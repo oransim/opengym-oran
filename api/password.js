@@ -16,7 +16,7 @@
  * memory limit by a burst of logins. */
 import crypto from 'node:crypto';
 
-export const MIN_LENGTH = 10;
+export const MIN_LENGTH = 6;
 // Long passphrases are the point, so the cap is only there to bound the work: scrypt runs its
 // input through PBKDF2 first, and a 5 MiB "password" would be hashed in full.
 export const MAX_LENGTH = 256;
@@ -142,51 +142,14 @@ export const maskEmail = e => {
 };
 
 /* ------------------------------------------------------------------ policy ----------------
-   Length first, which is what actually matters; then a short list of the passwords every
-   guessing script tries first. The list only has to hold entries of MIN_LENGTH or more — the
-   rest are already too short — plus the stems people pad with digits and a "!" to get past a
-   length rule. A leaked-password database would be better and is deliberately not bundled:
-   it is megabytes, and an instance that locks an account after a handful of wrong guesses is
-   not where the long tail of that list gets tried. */
-const COMMON = new Set([
-  '1234567890', '0987654321', '12345678910', '123456789012', '1234567890123', '11111111111',
-  '1111111111', '0000000000', '9999999999', '1q2w3e4r5t', '1q2w3e4r5t6y', 'q1w2e3r4t5',
-  'qwertyuiop', 'qwertyuiop[]', 'asdfghjkl;', 'asdfghjkl', 'zxcvbnm,./', '1qaz2wsx3edc',
-  'qazwsxedc123', 'qwerty123456', 'qwertz123456', 'azerty123456', 'password12', 'password123',
-  'password1234', 'password12345', 'passw0rd123', 'iloveyou123', 'abcdefghij', 'abcd123456',
-  'abc1234567', 'a1b2c3d4e5', 'aaaaaaaaaa', 'princess123', 'football123', 'baseball123',
-  'sunshine123', 'superman123', 'welcome123', 'welcome1234', 'letmein123', 'trustno1234',
-  'changeme123', 'administrator', 'opengym123', 'opengym1234', 'qwerty1234567', '123qweasdzxc',
-  'zaq12wsxcde3', '1q2w3e4r5t6y7u', 'q1w2e3r4t5y6', '123123123123', '1234512345',
-  '123456123456', 'monkey12345', 'dragon12345', 'master12345', 'shadow12345', 'michael123',
-  'jennifer123', 'computer123', 'starwars123', 'whatever123', 'freedom1234', 'pokemon1234',
-  'liverpool123', 'chelsea1234', 'arsenal1234', 'barcelona123', 'realmadrid123', 'juventus123',
-  'hallo12345', 'passwort123', 'passwort1234', 'motdepasse123', 'contrasena123', 'contraseña123',
-  'senha123456', 'parola12345', 'haslo123456', 'wachtwoord123', 'salasana123', 'gymgymgym1'
-]);
-const STEMS = new Set([
-  'password', 'passwort', 'passw0rd', 'motdepasse', 'contrasena', 'contraseña', 'senha', 'parola',
-  'haslo', 'wachtwoord', 'salasana', 'qwerty', 'qwertz', 'azerty', 'qwertyuiop', 'asdfgh',
-  'letmein', 'welcome', 'iloveyou', 'admin', 'administrator', 'changeme', 'opengym', 'gym',
-  'workout', 'fitness', 'dragon', 'monkey', 'football', 'baseball', 'sunshine', 'princess',
-  'superman', 'batman', 'master', 'shadow', 'trustno', 'abc', 'abcdef', 'secret', 'login'
-]);
-
-/** Why a password may not be used, as a short code the client translates — or null. `name` is
- *  the profile name it will sign in with: that name plus a few digits is not a password. */
-export function passwordProblem(pw, name) {
+   This personal fork asks only for a minimum length. The upper bound keeps an extremely large
+   input from consuming excessive work during hashing. */
+/** Why a password may not be used, as a short code the client translates — or null. */
+export function passwordProblem(pw) {
   if (typeof pw !== 'string') return 'too-short';
   const len = passwordLength(pw);
   if (len < MIN_LENGTH) return 'too-short';
   if (len > MAX_LENGTH) return 'too-long';
-  const low = normalize(pw).toLowerCase();
-  if (new Set(low).size <= 2) return 'too-common';          // "aaaaaaaaaa", "abababababab"
-  if (COMMON.has(low)) return 'too-common';
-  // Letters of any script count as the stem; what a length rule gets padded with does not.
-  const stem = low.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
-  if (STEMS.has(stem)) return 'too-common';                   // "Password123!", "qwerty.2024"
-  const n = nameKey(name);
-  if (n.length >= 3 && stem === n) return 'too-common';       // "ana.2024.2024"
   return null;
 }
 

@@ -18,7 +18,7 @@ import { Row, Button } from './ui.jsx'
 
 // The server's floor (api/password.js MIN_LENGTH), checked here first so the common mistake is
 // answered without a round trip. The server still decides.
-export const MIN_PASSWORD = 10
+export const MIN_PASSWORD = 6
 export const passwordOn = config => !!config?.password_login
 // An address the way the server stores and compares it (nameKey in api/password.js): NFKC,
 // trimmed, lower-cased.
@@ -33,7 +33,7 @@ export const looksLikeEmail = s => {
 
 const ui = () => useUI.getState()
 const toast = m => ui().toast(m)
-const length = s => [...String(s || '')].length
+const length = s => [...String(s || '').normalize('NFKC')].length
 const errStyle = { color: 'var(--red)', marginTop: 10 }
 
 // "in 5 minutes" in the UI language, for how long a pause (429, Retry-After) still lasts.
@@ -52,7 +52,6 @@ export function passwordError(e) {
     case 'bad-credentials': return t('Wrong name, e-mail or password.')
     case 'too-short': return t('Use at least {0} characters.', MIN_PASSWORD)
     case 'too-long': return t('That password is too long.')
-    case 'too-common': return t('That password is too easy to guess. Try a longer one, or a few random words strung together.')
     case 'name-taken': return t('Another profile already signs in with this name.')
     case 'email-invalid': return t('That is not an e-mail address.')
     case 'email-taken': return t('Another profile already uses this e-mail address.')
@@ -134,7 +133,7 @@ export function PasswordSignInSheet({ close, onPasskey }) {
         <div style={{ height: 10 }} />
         <input className="input" type="password" name="new-password-again" autoComplete="new-password" placeholder={t('Repeat the password')}
           value={again} onChange={e => setAgain(e.target.value)} />
-        <div className="dim small" style={{ marginTop: 6 }}>{t('At least {0} characters. A few unrelated words make a good one.', MIN_PASSWORD)}</div>
+        <div className="dim small" style={{ marginTop: 6 }}>{t('Use at least {0} characters.', MIN_PASSWORD)}</div>
       </> : <input className="input" type="password" name="password" autoComplete="current-password" placeholder={t('Password')}
         value={pw} onChange={e => setPw(e.target.value)} />}
       {err && <div className="small" role="alert" style={errStyle}>{err}</div>}
@@ -201,7 +200,7 @@ export function PasswordRegisterForm({ close, inviteOnly, name, setName, code, s
     <div style={{ height: 10 }} />
     <input className="input" type="password" name="new-password-again" autoComplete="new-password" placeholder={t('Repeat the password')}
       value={again} onChange={e => setAgain(e.target.value)} />
-    <div className="dim small" style={{ marginTop: 6 }}>{t('At least {0} characters. A few unrelated words make a good one.', MIN_PASSWORD)}</div>
+    <div className="dim small" style={{ marginTop: 6 }}>{t('Use at least {0} characters.', MIN_PASSWORD)}</div>
     {err && <div className="small" role="alert" style={errStyle}>{err}</div>}
     <div style={{ height: 12 }} />
     <Button type="submit" variant="primary" disabled={busy}>{t('Create profile')}</Button>
@@ -371,7 +370,7 @@ export function PasswordSheet({ status, close, done }) {
       <div style={{ height: 10 }} />
       <input className="input" type="password" name="new-password-again" autoComplete="new-password" placeholder={t('Repeat the password')}
         value={again} onChange={e => setAgain(e.target.value)} />
-      <div className="dim small" style={{ marginTop: 6 }}>{t('At least {0} characters. A few unrelated words make a good one.', MIN_PASSWORD)}</div>
+      <div className="dim small" style={{ marginTop: 6 }}>{t('Use at least {0} characters.', MIN_PASSWORD)}</div>
       {err && <div className="small" role="alert" style={errStyle}>{err}</div>}
       <div style={{ height: 12 }} />
       <Button type="submit" variant="primary" disabled={busy}>{status.set ? t('Save') : t('Confirm with passkey & save')}</Button>
