@@ -78,6 +78,11 @@ afterEach(() => {
 
 const mount = page => act(() => root.render(<Settings page={page} />))
 const rowOf = title => [...host.querySelectorAll('.lrow')].find(r => r.querySelector('.lrow-t')?.textContent === title)
+
+it('does not offer gym membership check-in in Home settings', () => {
+  mount('look')
+  expect(rowOf('Gym check-in')).toBeUndefined()
+})
 const picker = () => !!host.querySelector('.app-icon-stub')
 const shortcut = () => rowOf('Try the Halloween app icon')
 

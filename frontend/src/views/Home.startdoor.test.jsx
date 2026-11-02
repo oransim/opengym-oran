@@ -43,6 +43,12 @@ const mount = () => act(() => root.render(<Home />))
 const door = () => [...host.querySelectorAll('button')].find(b => b.textContent.includes('Choose a different workout'))
 
 describe('Home — the way to the Start screen when a plan already owns today', () => {
+  it('does not show the unused gym membership check-in card', () => {
+    setS({ checkIn: true, gymCards: [{ id: 'old', value: 'ABC', fmt: 'qrcode' }] }); mount()
+    expect(host.textContent).not.toContain('Check in')
+    expect(nav).not.toHaveBeenCalledWith('/checkin')
+  })
+
   it('opens the fasting timer from its Home card', () => {
     setS(); mount()
     const card = host.querySelector('.fasting-card')

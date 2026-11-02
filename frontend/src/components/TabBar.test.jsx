@@ -128,13 +128,13 @@ describe('the tab icons and labels', () => {
   })
 })
 
-// A screen without a tab of its own keeps the tab it was opened from lit. Check-in, Progress photos
+// A screen without a tab of its own keeps the tab it was opened from lit. Progress photos
 // and Body measurements lit none: Measurements moved under Stats (75a3b750) and the bar never heard.
 describe('the tab a screen without its own lights', () => {
   const lit = () => tabs().filter(b => b.classList.contains('on')).map(b => b.textContent)
   it.each([
     ['/history', 'Stats'], ['/structural-balance', 'Stats'], ['/progress-photos', 'Stats'], ['/measurements', 'Stats'],
-    ['/settings', 'Home'], ['/settings/units', 'Home'], ['/checkin', 'Home'], ['/muscles', 'Exercises'],
+    ['/settings', 'Home'], ['/settings/units', 'Home'], ['/muscles', 'Exercises'],
   ])('%s lights %s', (pathname, tab) => {
     where.loc = { pathname }
     act(() => { root.render(<TabBar onStart={() => {}} />) })
