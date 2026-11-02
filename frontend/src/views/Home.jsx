@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutines, effectiveRoutineIds, nextTrainingDay, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
@@ -17,9 +17,36 @@ import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { dayNoteOf } from '../lib/day-notes.js'
 import { weighInAt } from '../lib/bodyweight.js'
-import { activeFast } from '../lib/fasting.js'
+import { activeFast, fastDuration } from '../lib/fasting.js'
 import WeightRate from '../components/WeightRate.jsx'
 import { SeasonDeco } from '../components/Seasonal.jsx'
+
+function FastingCard({ fasting, onOpen }) {
+  const [now, setNow] = useState(Date.now)
+
+  useEffect(() => {
+    if (!fasting) return
+    const tick = () => { if (!document.hidden) setNow(Date.now()) }
+    tick()
+    const timer = setInterval(tick, 1000)
+    document.addEventListener('visibilitychange', tick)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick) }
+  }, [fasting?.start])
+
+  return <div className="card tappable fasting-card" style={{ cursor: 'pointer' }} {...tappable(onOpen)}>
+    <div className="row between">
+      <div className="row" style={{ gap: 9 }}>
+        <span className="lrow-i" style={{ background: 'var(--orange)' }}><Icon name="timer" /></span>
+        <div><div className="lbl2">{t('Fasting')}</div>
+          <div className="ttl" role={fasting ? 'timer' : undefined} style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {fasting ? fastDuration(fasting, now) : t('Start a fast')}
+          </div>
+        </div>
+      </div>
+      <Icon name="chevronRight" className="chev" />
+    </div>
+  </div>
+}
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -166,15 +193,7 @@ export default function Home() {
       <SeasonDeco spot="home-hero" />
     </div>
 
-    <div className="card tappable fasting-card" style={{ cursor: 'pointer' }} {...tappable(() => nav('/fasting'))}>
-      <div className="row between">
-        <div className="row" style={{ gap: 9 }}>
-          <span className="lrow-i" style={{ background: 'var(--orange)' }}><Icon name="timer" /></span>
-          <div><div className="lbl2">{t('Fasting')}</div><div className="ttl">{fasting ? t('Fast in progress') : t('Start a fast')}</div></div>
-        </div>
-        <Icon name="chevronRight" className="chev" />
-      </div>
-    </div>
+    <FastingCard fasting={fasting} onOpen={() => nav('/fasting')} />
 
     {!S.routines.length && !S.active && (
       <div className="card">

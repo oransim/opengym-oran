@@ -28,7 +28,7 @@ beforeEach(() => {
   document.body.appendChild(host)
   root = createRoot(host)
 })
-afterEach(() => { act(() => root.unmount()); host.remove() })
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.useRealTimers() })
 
 // Every weekday points at a routine and the weigh-in is off: today is always planned, and the
 // weigh-in sheet's own way through to the Start screen never opens.
@@ -56,6 +56,17 @@ describe('Home — the way to the Start screen when a plan already owns today', 
     expect(card.textContent).toContain('Fasting')
     act(() => card.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(nav).toHaveBeenCalledWith('/fasting')
+  })
+
+  it('shows an active fast elapsed timer on Home and keeps it ticking', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-02T10:00:00Z'))
+    const start = Date.now() - 65_000
+    setS({ fasts: { running: { id: 'running', start, _ts: start } } }); mount()
+    const card = host.querySelector('.fasting-card')
+    expect(card.querySelector('[role="timer"]')?.textContent).toBe('0:01:05')
+    act(() => vi.advanceTimersByTime(1000))
+    expect(card.querySelector('[role="timer"]')?.textContent).toBe('0:01:06')
   })
 
   it('offers the door on a planned day, where the Start button would start the plan', () => {
