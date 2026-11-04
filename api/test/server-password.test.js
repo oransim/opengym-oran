@@ -299,15 +299,18 @@ test('registration with a password: policy, unique names among password holders,
   assert.deepEqual((await reg({ name: 'Cleo', password: GOOD })).body.code, 'invite');
   assert.equal((await reg({ name: 'Cleo', password: GOOD, code: 'WRONG' })).status, 403);
   assert.equal((await reg({ name: 'Cleo', password: 'short', code: 'invite1' })).body.code, 'too-short');
+  const common = await reg({ name: 'Cleo', password: 'passwordpassword', code: 'invite1' });
+  assert.equal(common.body.code, 'too-common');
+  assert.match(common.body.error, /common/i);
   assert.equal((await reg({ name: 'ANA', password: GOOD, code: 'invite1' })).status, 409);
-  const r = await reg({ name: 'Cleo', password: 'abc123', code: 'invite1' });
+  const r = await reg({ name: 'Cleo', password: 'safe example passphrase', code: 'invite1' });
   assert.equal(r.status, 200);
   assert.ok(r.cookie);
   const db = h.db();
   const cleo = db.users.find(u => u.name === 'Cleo');
   assert.match(cleo.pw.h, /^\$scrypt\$v=1\$ln=15,r=8,p=1\$/);
-  assert.equal(JSON.stringify(db).includes('abc123'), false, 'the password itself is never stored');
-  assert.equal((await login(h, 'Cleo', 'abc123', '198.51.100.83')).status, 200);
+  assert.equal(JSON.stringify(db).includes('safe example passphrase'), false, 'the password itself is never stored');
+  assert.equal((await login(h, 'Cleo', 'safe example passphrase', '198.51.100.83')).status, 200);
   assert.equal(db.invites[0].usedBy, cleo.id);
   // Burned: the same code does not let anyone else in.
   assert.equal((await reg({ name: 'Dora', password: GOOD, code: 'INVITE1' }, '198.51.100.81')).status, 403);

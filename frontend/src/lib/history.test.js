@@ -1322,6 +1322,11 @@ describe('effectiveRoutineIds / effectiveRoutines', () => {
     expect(effectiveRoutineIds(S({ 3: ['r1', 'r2'] }, { [ISO]: 'r2' }), ISO)).toEqual(['r2'])
     expect(effectiveRoutineIds(S({ 3: ['r1', 'r2'] }, { [ISO]: 'rest' }), ISO)).toEqual([])
   })
+  it('skips one scheduled routine on one date and keeps the others', () => {
+    const s = { ...S({ 3: ['r1', 'r2'] }), dayPlanSkip: { [ISO]: ['r1'] } }
+    expect(effectiveRoutineIds(s, ISO)).toEqual(['r2'])
+    expect(effectiveRoutineIds(s, '2026-08-26')).toEqual(['r1', 'r2'])
+  })
   it('the singular wrappers return [0] ?? null', () => {
     expect(effectiveRoutineId(S({ 3: ['r1', 'r2'] }), ISO)).toBe('r1')
     expect(effectiveRoutine(S({ 3: ['r1', 'r2'] }), ISO).name).toBe('A')
@@ -1527,7 +1532,7 @@ describe('per-side volume and legacy timed sets (QA round 2026-09-12)', () => {
   })
 })
 
-describe('a rotation day and a fixed weekday day are one combined day', () => {
+describe('a saved personal rotation and a fixed weekday plan', () => {
   const routines = [{ id: 'a', name: 'A', ex: [] }, { id: 'core', name: 'Core', ex: [] }]
   const TODAY = '2026-09-14'   // a Monday
   const S = over => ({
@@ -1536,15 +1541,15 @@ describe('a rotation day and a fixed weekday day are one combined day', () => {
     rotation: { id: 'r1', sequence: ['a'], label: 'My split' }, ...over,
   })
 
-  it('the queue session comes first, the weekday routine rides along', () => {
-    expect(effectiveRoutineIds(S(), TODAY, TODAY)).toEqual(['a', 'core'])
+  it('ignores the saved personal queue and keeps the weekday routine', () => {
+    expect(effectiveRoutineIds(S(), TODAY, TODAY)).toEqual(['core'])
   })
 
   it('a malformed queue falls back to the plain weekday plan', () => {
     expect(effectiveRoutineIds(S({ queue: { ids: ['gone'], since: 1 } }), TODAY, TODAY)).toEqual(['core'])
   })
 
-  it('a repeated queue id does not repeat the day', () => {
+  it('an external queue still joins the weekday without repeating an id', () => {
     const dup = S({ queue: { ids: ['a', 'a'], since: Date.parse('2026-09-13T08:00:00'), startsOn: '2026-09-13', label: 'My split' } })
     expect(effectiveRoutineIds(dup, TODAY, TODAY)).toEqual(['a', 'core'])
   })

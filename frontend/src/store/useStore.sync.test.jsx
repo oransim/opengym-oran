@@ -470,8 +470,8 @@ describe('removals and settings across a conflict', () => {
   })
 })
 
-describe('a rotation pass a merge leaves complete', () => {
-  it('starts its next pass, as the finish that completed it would have', async () => {
+describe('an archived personal pass after a sync merge', () => {
+  it('keeps the saved queue without starting another pass', async () => {
     vi.useFakeTimers()
     const now = Date.parse('2026-09-12T10:00:00')
     vi.setSystemTime(now)
@@ -491,7 +491,7 @@ describe('a rotation pass a merge leaves complete', () => {
 
     const q = puts().at(-1).state.queue
     expect(q.ids).toEqual(['a', 'b'])
-    expect(q.startsOn).toBe('2026-09-12')
-    expect(q.since).toBeGreaterThanOrEqual(now)
+    expect(q.startsOn).toBe('2026-09-07')
+    expect(q.since).toBe(now - 5 * 86400000)
   })
 })

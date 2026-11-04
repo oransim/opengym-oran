@@ -10,6 +10,7 @@ import { useUI } from '../store/useUI.js'
 import { closeOpenRow } from '../lib/use-swipe-row.js'
 import { restoreRoutine, routineSnapshot, deleteRoutine } from '../lib/routines.js'
 import Plan, { deleteRoutineWithUndo, takeOutOfLoop } from './Plan.jsx'
+import Routines from './Routines.jsx'
 import { chooseFixedWeek, saveRotation, scheduleModeOf } from '../lib/rotation.js'
 
 const nav = vi.fn()
@@ -36,7 +37,7 @@ function mount(view, extra = {}) {
   }, extra)
   useStore.setState({ S, user: null })
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host)
-  act(() => root.render(<Plan />))
+  act(() => root.render(view === 'routines' ? <Routines /> : <Plan />))
 }
 const S = () => useStore.getState().S
 const swrows = () => [...host.querySelectorAll('.swrow')]
@@ -91,9 +92,9 @@ describe('the routines list', () => {
     expect(r.getAttribute('role')).toBe('button')
     expect(r.tabIndex).toBe(0)
     act(() => { r.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
-    expect(nav).toHaveBeenLastCalledWith('/plan/r/b')
+    expect(nav).toHaveBeenLastCalledWith('/routines/r/b')
     click(rowOf('Push A').querySelector('.item'))
-    expect(nav).toHaveBeenLastCalledWith('/plan/r/a')
+    expect(nav).toHaveBeenLastCalledWith('/routines/r/a')
     const panes = rowOf('Push A').querySelectorAll('.swpane')
     expect(panes).toHaveLength(2)
     for (const pane of panes) {
@@ -178,38 +179,6 @@ describe('the loop', () => {
     queue: { ids: ['a', 'b', 'c'], since: 1, startsOn: '2026-10-01', label: 'My loop', rotationId: 'rot' },
     scheduleMode: 'rotation', week: {}, dayPlan: { '2099-01-01': 'b' } }
 
-  it('a swipe toward the start takes the routine out, and Undo puts the loop and its pin back', () => {
-    mount('schedule', clone(loop))
-    expect(swrows()).toHaveLength(3)
-    // remove-only: no copy pane, and a swipe toward the end does nothing
-    expect(rowOf('Pull A').querySelector('.swpane.cp')).toBeNull()
-    expect(rowOf('Pull A').querySelector('.swpane.del').textContent).toBe('Remove')
-    swipe(rowOf('Pull A'), 60, 330)
-    expect(S().queue.ids).toEqual(['a', 'b', 'c'])
-
-    swipe(rowOf('Pull A'), 330, 60)
-    expect(S().queue.ids).toEqual(['a', 'c'])
-    expect(S().rotation.sequence).toEqual(['a', 'c'])
-    expect(S().dayPlan).toEqual({})          // its future pin was swept with it
-    expect(S().routines).toHaveLength(3)     // out of the loop, not deleted
-    expect(useUI.getState().toastMsg).toBe('“Pull A” is out of the loop.')
-
-    undo()
-    expect(S().queue).toEqual(loop.queue)
-    expect(S().rotation).toEqual(loop.rotation)
-    expect(S().dayPlan).toEqual(loop.dayPlan)
-  })
-
-  it('Undo after the loop changed again slots the routine back at its old place', () => {
-    mount('schedule', clone(loop))
-    swipe(rowOf('Pull A'), 330, 60)
-    const pending = useUI.getState().toastAction
-    act(() => useStore.getState().update(s => { s.queue = { ...s.queue, ids: ['c', 'a'] }; s.rotation = { ...s.rotation, sequence: ['c', 'a'] } }))
-    act(() => pending.run())
-    expect(S().queue.ids).toEqual(['c', 'b', 'a'])
-    expect(S().rotation.sequence).toEqual(['c', 'b', 'a'])
-  })
-
   // The store's update, the way Plan's editor saves (Plan.jsx setSeq).
   const setSeq = ids => useStore.getState().update(s => {
     if (ids.length) saveRotation(s, ids, 'My loop')
@@ -258,20 +227,6 @@ describe('the loop', () => {
     act(() => pending.run())
     expect(S().queue.ids).toEqual(['a', 'c'])
     expect(useUI.getState().toastMsg).toBe('Too late, that one’s gone')
-  })
-
-  it('the edit-mode minus has the same Undo, and weekday rows never swipe', () => {
-    mount('schedule', { ...clone(loop), week: { 1: ['c'], 2: ['a'] } })
-    click([...host.querySelectorAll('.plan-textbtn')].find(b => b.textContent === 'Edit'))
-    click(host.querySelector('button[aria-label="Remove Legs"]'))
-    expect(S().queue.ids).toEqual(['a', 'b'])
-    undo()
-    expect(S().queue.ids).toEqual(['a', 'b', 'c'])
-    act(() => root.unmount()); host.remove()
-
-    mount('schedule', { week: { 1: ['a'], 3: ['b'] } })   // a fixed week
-    expect(host.querySelectorAll('.plan-day').length).toBeGreaterThan(0)
-    expect(swrows()).toHaveLength(0)
   })
 
   it('a coach’s own queue does not swipe', () => {

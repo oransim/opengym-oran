@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// Home and Plan both offer the starter plan to someone who has no routines yet. Both used to
-// wire the button straight to the loader, which quietly handed the click event in as the plan
-// id and loaded nothing at all — so both entry points are pinned here.
+// Starter-plan setup belongs in Plan, where the schedule and routines are edited.
 import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
@@ -33,9 +31,34 @@ afterEach(() => {
 
 const starterButton = () => [...host.querySelectorAll('button')].find(b => b.textContent === 'Load starter plan')
 
-describe.each([['Home', Home], ['Plan', Plan]])('%s empty state', (_name, View) => {
+describe('Home empty state', () => {
+  it('keeps starter-plan setup off the dashboard', () => {
+    act(() => root.render(<Home />))
+    expect(starterButton()).toBeFalsy()
+    expect(host.textContent).not.toContain('Welcome!')
+  })
+
+  it('shows a seven-day calendar even before a rotation is configured', () => {
+    useStore.setState(s => ({ S: { ...s.S, scheduleMode: 'rotation', rotation: null, queue: null } }))
+    act(() => root.render(<Home />))
+    expect(host.querySelectorAll('.week-calendar-day')).toHaveLength(7)
+  })
+
+  it('shows the name of a routine assigned to a weekday', () => {
+    const dow = new Date().getDay()
+    useStore.setState(s => ({ S: { ...s.S, routines: [{ id: 'r', name: 'Climbing', emoji: 'star', ex: [] }], week: { [dow]: ['r'] }, scheduleMode: 'week' } }))
+    act(() => root.render(<Home />))
+    expect(host.querySelector('.week-calendar-day.today').textContent).toContain('Climbing')
+  })
+})
+
+describe('Plan empty state', () => {
+  it('shows the weekly calendar in Schedule', () => {
+    act(() => root.render(<Plan />))
+    expect(host.querySelectorAll('.week-calendar-day')).toHaveLength(7)
+  })
   it('opens the starter plan chooser instead of loading one plan blind', () => {
-    act(() => root.render(<View />))
+    act(() => root.render(<Plan />))
     const button = starterButton()
     expect(button).toBeTruthy()
 
@@ -45,7 +68,7 @@ describe.each([['Home', Home], ['Plan', Plan]])('%s empty state', (_name, View) 
 
   it('drops the offer once the user has routines', () => {
     useStore.setState(s => ({ S: { ...s.S, routines: [{ id: 'r', name: 'Mine', emoji: 'star', ex: [] }] } }))
-    act(() => root.render(<View />))
+    act(() => root.render(<Plan />))
     expect(starterButton()).toBeFalsy()
   })
 })

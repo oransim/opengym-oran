@@ -9,7 +9,7 @@
 # module-resolution errors.
 FROM --platform=$BUILDPLATFORM node:22.23.4-alpine AS build
 # The frontend sits at /app/frontend, not /app: the Coach's runtime-neutral core lives in
-# api/coach/core and is imported from frontend/src as ../../../api/coach/core/*, so the two
+# api/coach/core and api/shared are imported from frontend/src, so the two
 # have to keep the same relative position they have in the repository. Copying frontend/ alone
 # is exactly what made the v1.2.15 web image fail to build.
 WORKDIR /app/frontend
@@ -19,6 +19,7 @@ COPY frontend/package.json frontend/package-lock.json* ./
 # tool is now run with npx, docs/MOBILE.md, and not installed here).
 RUN npm ci --ignore-scripts
 COPY api/coach/core/ /app/api/coach/core/
+COPY api/shared/ /app/api/shared/
 COPY frontend/ ./
 # Which build this is, shown in the app as "1.3.8+<build>" next to the version. Without it every
 # image built between two releases calls itself the same thing, and "which build are you running?"
@@ -32,8 +33,8 @@ FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 # that user. Upgrade as root, then switch back. 101 has to be the last USER in this file so
 # the entrypoint and the nginx master both stay uid 101. It can bind port 80 under Docker,
 # which sets net.ipv4.ip_unprivileged_port_start=0; the base image's EXPOSE 8080 is metadata,
-# and nothing here listens on it. Another runtime (most Kubernetes ones, Podman rootless)
-# needs NGINX_PORT=1024 or higher, or that sysctl: helm/ and kubernetes/ use 8080.
+# and nothing here listens on it. Other runtimes, including Podman rootless, may need
+# NGINX_PORT=1024 or higher, or that sysctl.
 #
 # An upgrade can put the packaged nginx.conf back (a `user` directive, pid under /run) and
 # recreate /var/cache/nginx as root, which is the mkdir a non-root master dies on. Restore
@@ -85,8 +86,8 @@ ENV BACKEND=api
 ENV PORT=3000
 # The DNS nginx asks about BACKEND on every /api request. Docker's embedded resolver by
 # default, which is correct for compose. Nothing listens on it elsewhere, and an unreachable
-# resolver makes every /api request hang rather than fail, so any other runtime has to say
-# what its DNS is: on Kubernetes, the kube-dns/CoreDNS service address (commonly 10.96.0.10).
+# resolver makes every /api request hang rather than fail, so any other runtime has to set
+# RESOLVER to the address of its DNS service.
 ENV RESOLVER=127.0.0.11
 # Empty = the CF-Connecting-IP header is dropped before it reaches the API, so it cannot be
 # forged by a direct client. Set to $http_cf_connecting_ip only when Cloudflare is really in

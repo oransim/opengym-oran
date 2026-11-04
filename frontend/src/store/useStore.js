@@ -92,7 +92,7 @@ export const DEF = {
   theme: 'dark', accent: 'lime', body: 'male', targetW: null,
   // The weekly-rate corridor on the body-weight card (#759, lib/bodyweight.js rateCorridor).
   rateGoal: null,
-  bodyweight: [], routines: [], week: {}, dayPlan: {}, fasts: {},
+  bodyweight: [], routines: [], week: {}, dayPlan: {}, dayPlanSkip: {}, fasts: {},
   // A note per day off (#261): { [iso]: { tag, text, _ts } } (lib/day-notes.js). A noted day is
   // excused from the missed-day nudge; each day merges on its own stamp (lib/sync-merge.js).
   dayNotes: {},
@@ -1262,7 +1262,7 @@ export const useStore = create((set, get) => {
       const merged = Object.assign(clone(DEF), mergeStates(state, S, { prefer: 'a' }))
       merged.active = carryActive(S, merged)
       // The account's plan wins; a day it has nothing planned for takes the device's.
-      for (const f of ['week', 'dayPlan']) {
+      for (const f of ['week', 'dayPlan', 'dayPlanSkip']) {
         const mine = S[f] && typeof S[f] === 'object' ? S[f] : {}
         merged[f] = { ...mine, ...(merged[f] || {}) }
       }

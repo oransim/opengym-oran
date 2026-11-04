@@ -37,7 +37,7 @@ const go = async to => { await act(async () => router.navigate(to)) }
 describe('root tab history', () => {
   it('does not accumulate a back stack when switching tabs repeatedly', async () => {
     for (let i = 0; i < 3; i++) {
-      for (const label of ['Plan', 'Stats', 'Exercises', 'Home']) await tap(label)
+      for (const label of ['Plan', 'Stats', 'Routines', 'Exercises', 'Home']) await tap(label)
     }
     await tap('Plan')
     expect(router.state.location.pathname).toBe('/plan')
@@ -66,10 +66,15 @@ describe('root tab history', () => {
   })
 
   it('opens a different tab root from a nested page of the active tab', async () => {
-    await go('/plan/r/one')
-    await tap('Plan')
-    expect(router.state.location.pathname).toBe('/plan')
+    await go('/routines/r/one')
+    await tap('Routines')
+    expect(router.state.location.pathname).toBe('/routines')
     expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('shows six distinct actions, with Routines beside Exercises', () => {
+    const labels = [...host.querySelectorAll('#tabbar button')].map(b => b.textContent.trim())
+    expect(labels).toEqual(['Home', 'Plan', 'Start', 'Stats', 'Routines', 'Exercises'])
   })
 
   it('preserves the workout chooser return path', async () => {

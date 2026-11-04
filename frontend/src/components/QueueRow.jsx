@@ -5,7 +5,7 @@ import { t } from '../lib/i18n.js'
 import { sequenceOf, isSimpleSequence } from '../lib/rotation.js'
 import Icon from './Icon.jsx'
 
-// Home's progress row for a coach week (S.queue) — it stands in for the seven weekday dots
+// Home's progress row for a coach week (S.queue) sits below the dated calendar
 // while a planner-written queue runs the week, because its sessions have no weekday: they are done in
 // order, on whatever days you train. One chip per session in slot order; the next undone one
 // is lit, and any undone chip starts its own routine, in whatever order the day calls for. A

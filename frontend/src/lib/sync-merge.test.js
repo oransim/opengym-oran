@@ -920,6 +920,25 @@ describe('settings and plan days keep the change made last', () => {
     for (const m of [mergeStates(onB(), cleared), mergeStates(cleared, onB())]) expect(m.week).toEqual({ 1: ['r1'] })
   })
 
+  it('keeps a one-date skip across a later unrelated edit and syncs its restoration', () => {
+    const start = base({ _ts: 100, dayPlanSkip: {} })
+    const phone = clone(start)
+    phone.dayPlanSkip['2026-09-07'] = ['r1']
+    phone._ts = 400
+    stampEdits(start, phone, 400)
+    const desk = clone(start)
+    desk.sound = false
+    desk._ts = 800
+    stampEdits(start, desk, 800)
+    const merged = mergeStates(phone, desk)
+    expect(merged.dayPlanSkip['2026-09-07']).toEqual(['r1'])
+    const restored = clone(merged)
+    delete restored.dayPlanSkip['2026-09-07']
+    restored._ts = 900
+    stampEdits(merged, restored, 900)
+    expect(mergeStates(phone, restored).dayPlanSkip['2026-09-07']).toBeUndefined()
+  })
+
   it('a rotation refill on one device survives a setting saved later on the other', () => {
     const s0 = base({ _ts: 100, queue: { ids: ['a', 'b'], since: 1, startsOn: '2026-09-01', rotationId: 'r' }, rotation: { id: 'r', sequence: ['a', 'b'] } })
     const phone = clone(s0)

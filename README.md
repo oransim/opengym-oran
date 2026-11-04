@@ -22,9 +22,9 @@ docker compose up -d --build
 curl http://localhost:8080/api/health
 ```
 
-Open <http://localhost:8080> and create your profile. `docker compose up --build` builds both containers from this repository. The two planned prebuilt images are `ghcr.io/oransim/opengym-oran-api:edge` and `ghcr.io/oransim/opengym-oran-web:edge`; GitHub Actions is currently disabled, so those images have not been published.
+Open <http://localhost:8080> and create your profile. `docker compose up --build` builds both containers from this repository. After GitHub Actions is enabled and the tests pass on `main`, the workflow publishes `ghcr.io/oransim/opengym-oran-api:edge` and `ghcr.io/oransim/opengym-oran-web:edge`.
 
-The sign-in screen accepts a profile name and password. Passwords need at least six characters, with no character-type rules. If you already have a passkey profile, sign in with it once and add a password in **Settings → Account → Password**. Browser sessions use a persistent cookie and last 90 days by default, so reopening the app or a tab normally signs you in automatically. Signing out, clearing browser cookies, or using a private window ends that convenience.
+The sign-in screen accepts a profile name and password. New passwords need at least 15 characters, with no character-type rules; existing shorter passwords still work until changed. If you already have a passkey profile, sign in with it once and add a password in **Settings → Account → Password**. Browser sessions use a persistent cookie and last 90 days by default, so reopening the app or a tab normally signs you in automatically. Signing out, clearing browser cookies, or using a private window ends that convenience.
 
 ## Use it from your phone
 
@@ -35,10 +35,9 @@ The API stores accounts, routines, workouts, and uploads in `./data`. Back up th
 ## Deployment files
 
 - [Docker Compose](docker-compose.yml) for a small server.
-- [Helm chart](helm/README.md) and [Kubernetes manifests](docs/SELF_HOSTING_KUBERNETES.md) for a cluster.
 - [HTTPS on a private network](docs/SELF_HOSTING_HTTPS.md) if you do not want a public hostname.
 
-The deployment files point to this fork's image names. Until images are published, use the Compose source build or build and load the images into your cluster yourself. Enabling GitHub Actions remains a separate choice.
+The Compose file points to this fork's image names. Until images are published, use the Compose source build. Enabling GitHub Actions remains a separate repository setting.
 
 ## License and media
 

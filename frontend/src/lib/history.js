@@ -1,6 +1,7 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { syncSupersetMeta } from './superset-meta.js'
 import { routineHasContent } from './visit-routine.js'
+import { isExerciseRepeat } from './exercise-repeat.js'
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
 import { fmtSpeed } from './speed.js'
 import { hasIncline, inclineFrom } from './incline.js'
@@ -497,17 +498,18 @@ export function bestWeightFor(S, exId, as) {
  * other days. Once the session is done the pin is fulfilled and the day reads as if unpinned.
  */
 export function effectiveRoutineIds(S, iso, today = todayISO()) {
+  const skipped = new Set(Array.isArray(S.dayPlanSkip?.[iso]) ? S.dayPlanSkip[iso] : [])
   const ov = S.dayPlan[iso]
   if (ov === 'rest') return []
   const pin = pinState(S, ov)
-  if (!pin && ov && S.routines.some(r => r.id === ov)) return [ov]
+  if (!pin && ov && S.routines.some(r => r.id === ov && !isExerciseRepeat(r))) return skipped.has(ov) ? [] : [ov]
   const wd = new Date(iso + 'T12:00:00').getDay()
-  const weekday = [].concat(S.week[wd] || []).filter(id => S.routines.some(r => r.id === id))
+  const weekday = [].concat(S.week[wd] || []).filter(id => S.routines.some(r => r.id === id && !isExerciseRepeat(r)))
   const q = pin === 'open' ? ov : queueNext(S, iso, today)
   // The planner's weekday pointers stay hidden on the queue's day even when it has no session for
   // it (every remaining one pinned to another day): those sessions have their days.
   const own = q || queueLiveOn(S, iso, today) ? weekday.filter(id => !S.queue.ids.includes(id)) : weekday
-  return q ? [q, ...own] : own
+  return (q ? [q, ...own] : own).filter(id => !skipped.has(id))
 }
 export function effectiveRoutines(S, iso) {
   return effectiveRoutineIds(S, iso).map(id => S.routines.find(r => r.id === id)).filter(Boolean)

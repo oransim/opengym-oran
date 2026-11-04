@@ -69,6 +69,15 @@ describe('Add routine mid-session sheet', () => {
     expect(rowFor(host, 'Empty').className).toContain('disabled')
     expect(rowFor(host, 'Empty').textContent).toContain('no exercises')
   })
+
+  it('keeps standalone exercise repeats out of the routine picker', () => {
+    setup()
+    useStore.getState().update(s => { s.routines.push({ id: 'repeat', name: 'Pancake stretch', kind: 'exercise-repeat', ex: [{ id: ids[3], sets: 3, reps: 10 }] }) }, false)
+    addRoutineToSessionSheet()
+    const host = renderTop()
+    expect(rowFor(host, 'Core')).toBeTruthy()
+    expect(rowFor(host, 'Pancake stretch')).toBeUndefined()
+  })
 })
 
 describe('WorkoutDetail — per-routine grouping', () => {

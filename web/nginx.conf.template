@@ -52,8 +52,7 @@ server {
         # RESOLVER defaults to Docker's embedded DNS, which is where this image usually runs.
         # Nothing answers on that address outside Docker, and an unreachable resolver does not
         # fail fast — every /api request hangs until it times out. Anywhere else, set RESOLVER to
-        # the DNS the platform actually provides: on Kubernetes that is the kube-dns/CoreDNS
-        # service address (`kubectl -n kube-system get svc kube-dns`, commonly 10.96.0.10).
+    # the DNS the platform actually provides.
         resolver ${RESOLVER} valid=10s ipv6=off;
         set $api_upstream http://${BACKEND}:${PORT};
         # With a URI after the host, a proxy_pass built from variables sends that URI verbatim;

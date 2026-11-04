@@ -20,8 +20,6 @@ import { deleteRoutine } from './routines.js'
 import { POLICIES } from './progression.js'
 import { t, tn } from './i18n.js'
 import { snapshotKey } from './sync-merge.js'
-import { scheduleModeOf, startNewPass } from './rotation.js'
-import { queueOf } from './queue.js'
 
 // Bumping this re-prompts everyone: it means what we share, or who we share it with, changed.
 // 2: the training line names the session notes, which the payload carries and version 1 never
@@ -429,33 +427,13 @@ export function applyCreatedPlan(s, proposal, { schedule } = {}) {
   // Only when the week actually moved — with the switch off the old schedule still stands, and
   // so do the reschedules made against it.
   if (schedule) sweepDayPlan(s, todayISO())
-  const rotation = !!schedule && useInRotation(s, res.ids, bundle.name)
   res.logId = appendLog(s, {
     kind: 'create', at: Date.now(), proposalId: proposal.id,
     summary: proposal.summary || '', routines: res.routines, iteration: proposal.iteration || 1,
-    bundle: lightBundle(bundle), scheduled: !!schedule, ...(rotation ? { rotation: true } : {})
+    bundle: lightBundle(bundle), scheduled: !!schedule,
   })
-  res.rotation = rotation
+  res.rotation = false
   return res
-}
-
-/**
- * In rotation mode Home and Plan read the loop, not the week (lib/rotation.js), so a created plan
- * that only set the week never showed up (#778). With the schedule switch on, the loop becomes
- * the plan's routines in the Coach's order and starts over from the first one. The Coach plans a
- * week, not rest days, so the loop has none. The old loop and pass go on the snapshot for Undo.
- * A planner's queue is its writer's (rotation.js OWNERSHIP) and stays as it is. Returns whether
- * the rotation was set.
- */
-function useInRotation(s, ids, name) {
-  if (scheduleModeOf(s) !== 'rotation' || !ids?.length) return false
-  const q = queueOf(s)
-  if (q && (!s.rotation || q.rotationId !== s.rotation.id)) return false
-  const snap = (coachOf(s).snapshots || []).at(-1)
-  if (snap) snap.rotationRestore = { rotation: clone(s.rotation ?? null), queue: clone(s.queue ?? null) }
-  s.rotation = { id: s.rotation?.id ?? uid(), sequence: [...ids], label: name || s.rotation?.label || '', at: 0 }
-  startNewPass(s)
-  return true
 }
 
 /* ============================ applying a change-set ============================ */

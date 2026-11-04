@@ -23,6 +23,17 @@ const clone = o => JSON.parse(JSON.stringify(o))
 const exportBackup = S => JSON.stringify(S, null, 2)
 // Settings.jsx `doImport` → replaceState → persist, which normalizes on the way in.
 const importBackup = json => normalizeMeasurementsState(Object.assign(clone(DEF), JSON.parse(json)))
+
+it('keeps an exercise repeat and its weekdays through backup and restore', () => {
+  const before = clone(DEF)
+  before.routines.push({ id: 'repeat-a', name: 'Side split', kind: 'exercise-repeat', ex: [{ id: '0025', sets: 3, mode: 'time', sec: 45 }] })
+  before.week[1] = ['repeat-a']
+  before.week[4] = ['repeat-a']
+  const after = importBackup(exportBackup(before))
+  expect(after.routines.find(r => r.id === 'repeat-a')).toEqual(before.routines.at(-1))
+  expect(after.week[1]).toEqual(['repeat-a'])
+  expect(after.week[4]).toEqual(['repeat-a'])
+})
 // api/server.js `PUT /api/data` stores the blob verbatim, minus the in-progress workout.
 const pushToServer = S => { const b = clone(S); delete b.active; return JSON.stringify({ state: b }) }
 // useStore.js `pullState` → persist, same overlay-then-normalize as the import path.

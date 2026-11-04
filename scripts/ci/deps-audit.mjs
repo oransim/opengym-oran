@@ -4,7 +4,7 @@
 // Fails when a shipped dependency has a high or critical advisory; dev findings are listed.
 // Reads the lockfiles only, so it needs no `npm ci`.
 //
-//   node scripts/ci/deps-audit.mjs frontend api mcp
+//   node scripts/ci/deps-audit.mjs . frontend api mcp
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 
@@ -22,13 +22,16 @@ const SEV = ['critical', 'high', 'moderate', 'low', 'info']
 const lines = ['### Dependency audit', '', '| Package dir | Shipped: critical / high / moderate / low | Dev only: critical / high / moderate / low |', '|---|---|---|']
 const details = []
 let fail = false
+let auditFailed = false
 for (const dir of dirs) {
   const prod = audit(dir, true)
   const all = audit(dir, false)
+  const complete = !prod.error && !all.error && prod.metadata?.vulnerabilities && all.metadata?.vulnerabilities
+  if (!complete) auditFailed = true
   const count = (r) => SEV.slice(0, 4).map((s) => r?.metadata?.vulnerabilities?.[s] ?? '?').join(' / ')
   const devOnly = {}
   for (const s of SEV) devOnly[s] = (all?.metadata?.vulnerabilities?.[s] || 0) - (prod?.metadata?.vulnerabilities?.[s] || 0)
-  lines.push(`| ${dir} | ${prod.error ? 'audit failed' : count(prod)} | ${SEV.slice(0, 4).map((s) => devOnly[s]).join(' / ')} |`)
+  lines.push(`| ${dir} | ${complete ? count(prod) : 'audit failed'} | ${complete ? SEV.slice(0, 4).map((s) => devOnly[s]).join(' / ') : 'audit failed'} |`)
   const prodNames = new Set(Object.keys(prod?.vulnerabilities || {}))
   for (const [name, v] of Object.entries(all?.vulnerabilities || {})) {
     const via = (v.via || []).filter((x) => typeof x === 'object').map((x) => `${x.title} (${x.url})`)
@@ -37,7 +40,8 @@ for (const dir of dirs) {
     if (shipped && (v.severity === 'high' || v.severity === 'critical')) fail = true
   }
 }
-const md = [...lines, '', details.length ? details.join('\n') : 'No known advisories.', ''].join('\n')
+const md = [...lines, '', details.length ? details.join('\n') : auditFailed ? 'Advisory data unavailable.' : 'No known advisories.', ''].join('\n')
 console.log(md)
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n')
+if (auditFailed) { console.log('::error::dependency audit did not complete'); process.exit(1) }
 if (fail) { console.log('::error::a shipped dependency has a high or critical advisory'); process.exit(1) }

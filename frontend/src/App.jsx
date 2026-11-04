@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { hideBoot } from './lib/boot.js'
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useNavigationType, useParams } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { bindUI } from './components/ui.jsx'
@@ -72,10 +72,15 @@ const ProgressPhotos = lazyView(() => import('./views/ProgressPhotos.jsx'))
 // The tabs and screens past Home (Stats, History, the Library, Settings, ...) as well: a start
 // only needs Home, and these are fetched right behind it the same way.
 const RoutineEdit = lazyView(() => import('./views/RoutineEdit.jsx'))
+const Routines = lazyView(() => import('./views/Routines.jsx'))
 const Stats = lazyView(() => import('./views/Stats.jsx'))
 const History = lazyView(() => import('./views/History.jsx'))
 const Fasting = lazyView(() => import('./views/Fasting.jsx'))
 const Library = lazyView(() => import('./views/Library.jsx'))
+const LegacyRoutineRedirect = () => {
+  const { id } = useParams()
+  return <Navigate to={'/routines/r/' + id} replace />
+}
 const Muscles = lazyView(() => import('./views/Muscles.jsx'))
 const SettingsRoute = lazyView(() => import('./views/Settings.jsx').then(m => ({ default: m.SettingsRoute })))
 let viewsPrefetched = false
@@ -292,7 +297,9 @@ function Shell() {
     <Routes location={l}>
       <Route path="/home" element={<Home />} />
       <Route path="/plan" element={<Plan />} />
-      <Route path="/plan/r/:id" element={<RoutineEdit />} />
+      <Route path="/routines" element={<Routines />} />
+      <Route path="/routines/r/:id" element={<RoutineEdit />} />
+      <Route path="/plan/r/:id" element={<LegacyRoutineRedirect />} />
       <Route path="/workout" element={<Workout />} />
       <Route path="/stats" element={<Stats />} />
       <Route path="/history" element={<History />} />

@@ -95,7 +95,7 @@ describe('the root', () => {
     expect(titles()).toEqual(['Guest', 'Workout', 'Timer alerts', 'Plan & schedule', 'Units & language', 'Equipment', 'Look & Home', 'Data & backup', 'About & updates'])
     expect(rowTitled('Workout').querySelector('.lrow-v').textContent).toBe('1:30 rest · Cards')
     expect(rowTitled('Timer alerts').querySelector('.lrow-v').textContent).toBe('Sound · Vibrate')
-    expect(rowTitled('Plan & schedule').querySelector('.lrow-v').textContent).toMatch(/^Fixed Week · Mon/)
+    expect(rowTitled('Plan & schedule').querySelector('.lrow-v').textContent).toMatch(/^Week starts on Mon/)
     expect(rowTitled('Units & language').querySelector('.lrow-v').textContent).toBe('kg · English')
     expect(rowTitled('Equipment').querySelector('.lrow-v').textContent).toBe('Everything')
     expect(rowTitled('About & updates').querySelector('.lrow-v').textContent).toMatch(/^v\d|^vtest/)
@@ -230,7 +230,7 @@ describe('the search lands on a row', () => {
     expect(searchSettings('test notification', web, tr).map(h => h.title)).toEqual(['Send test notification'])
     expect(searchSettings('server', web, tr).map(h => h.title)).toContain('Sync now')
     expect(searchSettings('sync', web, tr).map(h => h.title)).toContain('Sync now')
-    expect(searchSettings('loop', web, tr).map(h => h.title)).toContain('How you train')
+    expect(searchSettings('weekday', web, tr).map(h => h.title)).toContain('Week starts on')
     expect(searchSettings('swipe', web, tr)[0].title).toBe('Swipe actions')
     expect(searchSettings('gesture', web, tr).map(h => h.title)).toEqual(['Swipe actions'])
     expect(searchSettings('home screen', { ...web, desktopWeb: false }, tr).map(h => h.title)).toEqual(['In Safari: Share → Add to Home Screen'])
@@ -456,13 +456,11 @@ describe('searchSettings', () => {
       await setLang('de')
       const first = q => searchSettings(q, guestWeb, t)[0]?.title
       expect(first('Dunkel')).toBe('Theme')
-      expect(first('Feste Woche')).toBe('How you train')
       expect(first('Wochenstart')).toBe('Week starts on')
       expect(first('kompakt')).toBe('Layout')
       expect(first('wischen')).toBe('Swipe actions')
       expect(first('Geste')).toBe('Swipe actions')
       await setLang('ar')
-      expect(searchSettings('تناوب', guestWeb, t).map(h => h.title)).toContain('How you train')
     } finally { await setLang('en') }
   })
 

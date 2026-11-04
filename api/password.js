@@ -16,10 +16,27 @@
  * memory limit by a burst of logins. */
 import crypto from 'node:crypto';
 
-export const MIN_LENGTH = 6;
+export const MIN_LENGTH = 15;
 // Long passphrases are the point, so the cap is only there to bound the work: scrypt runs its
 // input through PBKDF2 first, and a 5 MiB "password" would be hashed in full.
 export const MAX_LENGTH = 256;
+// A small offline denylist for long variants of passwords commonly used as examples or
+// keyboard/number sequences. It is deliberately exact-match: a phrase containing one of these
+// words is not automatically weak. The minimum length remains the primary policy.
+const COMMON_PASSWORDS = new Set([
+  'passwordpassword', 'password123456789', 'password1234567890',
+  '123456789012345', '1234567890123456', '12345678901234567890',
+  'qwertyuiopasdfgh', 'qwertyuiopasdfghjkl', 'qwertyuiopqwerty',
+  'letmeinletmeinletmein', 'iloveyouiloveyou', 'adminadminadmin',
+  'abcdefghijklmnop', 'abcdefghijklmnopqrstuvwxyz',
+]);
+const repeatedShortUnit = pw => {
+  const chars = [...pw];
+  for (let width = 1; width <= 8 && width * 2 <= chars.length; width++) {
+    if (chars.length % width === 0 && chars.every((ch, i) => ch === chars[i % width])) return true;
+  }
+  return false;
+};
 
 const PARAMS = { ln: 15, r: 8, p: 1 };
 const KEYLEN = 32;
@@ -150,6 +167,8 @@ export function passwordProblem(pw) {
   const len = passwordLength(pw);
   if (len < MIN_LENGTH) return 'too-short';
   if (len > MAX_LENGTH) return 'too-long';
+  const folded = normalize(pw).toLowerCase();
+  if (COMMON_PASSWORDS.has(folded) || repeatedShortUnit(folded)) return 'too-common';
   return null;
 }
 

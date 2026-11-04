@@ -40,14 +40,26 @@ test('no stored hash, or a malformed one, never verifies — and still does the 
   }
 });
 
-test('policy: any string from 6 to 256 characters is accepted', () => {
+test('new passwords need 15 characters and reject obvious long passwords', () => {
   assert.equal(passwordProblem('short', 'Ana'), 'too-short');
   assert.equal(passwordProblem(12345678901, 'Ana'), 'too-short', 'not a string');
   assert.equal(passwordProblem('x'.repeat(257) + 'yz', 'Ana'), 'too-long');
   assert.equal(passwordProblem('correct horse battery staple '.repeat(9).slice(0, 256), 'Ana'), null, '256 characters are fine');
-  for (const pw of ['abc123', 'aaaaaa', 'Password123!', 'ana.2024.2024', 'correct horse battery', '日本語のパスワードです', '73920184652', 'Ana likes deadlifts']) {
+  for (const pw of ['abc123', 'aaaaaa', 'Password123!', '73920184652', '日本語のパスワードです']) {
+    assert.equal(passwordProblem(pw, 'Ana'), 'too-short', pw);
+  }
+  for (const pw of ['passwordpassword', '123456789012345', 'qwertyuiopasdfgh', 'aaaaaaaaaaaaaaa', 'passwordpasswordpassword']) {
+    assert.equal(passwordProblem(pw, 'Ana'), 'too-common', pw);
+  }
+  for (const pw of ['ana.2024.2024.xx', 'correct horse battery', 'Ana likes deadlifts']) {
     assert.equal(passwordProblem(pw, 'Ana'), null, pw);
   }
+});
+
+test('a legacy short password still verifies after the policy changes', async () => {
+  const hash = await hashPassword('abc123');
+  assert.equal(await verifyPassword('abc123', hash), true);
+  assert.equal(passwordProblem('abc123'), 'too-short');
 });
 
 test('names compare folded and trimmed', () => {

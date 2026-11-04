@@ -19,6 +19,20 @@ test('no queue: unchanged weekday/override behaviour', () => {
   assert.equal(effectiveRoutineId(S, '2026-09-08'), null); // Tuesday, nothing planned
 });
 
+test('a date skip omits only that routine from reminder planning', () => {
+  const S = { ...base, week: { 1: ['r1', 'r2'] }, dayPlanSkip: { '2026-09-07': ['r1'] } };
+  assert.equal(effectiveRoutineId(S, '2026-09-07'), 'r2');
+  assert.equal(effectiveRoutineId(S, '2026-09-14'), 'r1');
+});
+
+test('archived personal rotation does not drive reminders; an external queue still does', () => {
+  const S = { ...base, week: { 1: 'r2' }, rotation: { id: 'rot', sequence: ['r1'] },
+    queue: { ids: ['r1'], since: 1000, startsOn: '2026-09-07', rotationId: 'rot' } };
+  assert.equal(effectiveRoutineId(S, '2026-09-07'), 'r2');
+  S.queue = { ...S.queue, rotationId: 'coach' };
+  assert.equal(effectiveRoutineId(S, '2026-09-07'), 'r1');
+});
+
 test('queue: returns the first not-done session once startsOn is reached', () => {
   const S = { ...base, queue: { ids: ['r1', 'r2', 'r3'], since: 1000, startsOn: '2026-09-07', label: 'W1' } };
   assert.equal(effectiveRoutineId(S, '2026-09-07'), 'r1');

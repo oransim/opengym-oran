@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// A coach week (S.queue) runs by order, not by weekday, so Home swaps the seven dots for a
-// progress row. Covered here: one chip per session in slot order with its state word, a tap on
+// A coach week (S.queue) runs by order, not by weekday, so Home keeps its progress row beside
+// the dated weekly calendar. Covered here: one chip per session in slot order with its state word, a tap on
 // an undone chip starting that routine alone, a done chip staying inert, the status line's
 // states, the today row still answering through the same helper, and a session pinned to a day
 // (S.dayPlan[iso] = queue routine id) wearing its day on the chip and yielding the light.
@@ -8,10 +8,9 @@ import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { useStore } from '../store/useStore.js'
-import { startFlow } from '../sheets.jsx'
+import { startFlow, dayOverrideSheet } from '../sheets.jsx'
 import { todayISO, isoOf, fmtDate } from '../lib/format.js'
 import Home from './Home.jsx'
-import { setLang } from '../lib/i18n.js'
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../sheets.jsx', () => ({
@@ -39,6 +38,7 @@ let host, root
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   startFlow.mockClear()
+  dayOverrideSheet.mockClear()
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -59,11 +59,10 @@ const todayTitle = () => host.querySelector('.today-row .ttl')?.textContent
 const card = () => [...host.querySelectorAll('.card .muted.small')].map(e => e.textContent).find(x => x.includes('this week'))
 
 describe('Home — coach week progress row', () => {
-  it('replaces the weekday dots with one chip per session, in slot order, and lights the first', () => {
+  it('shows the dated week beside the ordered coach sessions and lights the first', () => {
     setS()
     mount()
-    expect(host.querySelector('.week')).toBeNull()
-    expect(host.querySelectorAll('.wday').length).toBe(0)
+    expect(host.querySelectorAll('.week-calendar-day')).toHaveLength(7)
     expect(host.querySelector('.queue .row .small').textContent).toBe('US W1')
     expect(chipTexts()).toEqual(['US W1 D1Up next', 'US W1 D2Later', 'US W1 D3Later'])
     expect(chips()[0].className).toBe('chip on')
@@ -118,22 +117,21 @@ describe('Home — coach week progress row', () => {
     expect(host.querySelector('.today-row .ss').textContent).toMatch(/^Next session: \w+, US W1 D1$/)
   })
 
-  it('a rotation-managed queue never names a weekday on its empty gap — the row above already says what is next', () => {
+  it('a queue with an unmatched rotation id is still an external coach queue', () => {
     const startsOn = daysFromToday(2)
     setS({ queue: queue({ startsOn, rotationId: 'r1' }) })
     mount()
     expect(status()).toBe('Next week starts ' + fmtDate(startsOn, true))
     expect(todayTitle()).toBe('Rest day')
-    expect(host.querySelector('.today-row .ss')).toBeNull()
+    expect(host.querySelector('.today-row .ss').textContent).toMatch(/^Next session:/)
   })
 
-  it('Rotation chosen with nothing built yet hides the weekday strip and offers an empty state instead', () => {
+  it('Rotation chosen with nothing built yet keeps the weekly calendar without a setup prompt on Home', () => {
     setS({ queue: null, rotation: null, scheduleMode: 'rotation', week: {} })
     mount()
-    expect(host.querySelector('.week')).toBeNull()
-    expect(host.querySelectorAll('.wday').length).toBe(0)
+    expect(host.querySelectorAll('.week-calendar-day')).toHaveLength(7)
     expect(host.querySelector('.queue')).toBeNull()
-    expect(host.textContent).toContain('No rotation yet')
+    expect(host.textContent).not.toContain('No rotation yet')
     expect(todayTitle()).toBe('Rest day')
     expect(host.querySelector('.today-row .ss')).toBeNull()
   })
@@ -147,26 +145,24 @@ describe('Home — coach week progress row', () => {
     expect(todayTitle()).toBe('Core')
   })
 
-  it('a pass this app manages gets its own copy, not the coach-week wording', () => {
+  it('a saved personal pass is hidden from the coach-week row', () => {
     setS({
       queue: queue({ rotationId: 'r1' }),
       rotation: { id: 'r1', sequence: ['d1', 'd2', 'd3'], label: 'US W1' },
       workouts: [logged('d1'), logged('d2'), logged('d3')],
     })
     mount()
-    expect(status()).toBe('Round complete')
-    // your own loop counts in rounds, like Plan; a coach week keeps the bare count (above)
-    expect(host.querySelectorAll('.queue .row .small')[1].textContent).toBe('3 of 3 done this round.')
+    expect(host.querySelector('.queue')).toBeNull()
   })
 
-  it('a managed pass waiting on its startsOn says so without naming a coach week', () => {
+  it('a saved personal pass waiting on its startsOn stays hidden', () => {
     const startsOn = daysFromToday(2)
     setS({
       queue: queue({ startsOn, rotationId: 'r1' }),
       rotation: { id: 'r1', sequence: ['d1', 'd2', 'd3'], label: 'US W1' },
     })
     mount()
-    expect(status()).toBe('Next round starts ' + fmtDate(startsOn, true) + '.')
+    expect(host.querySelector('.queue')).toBeNull()
   })
 
   it('own routines on the weekday ride along beside the queue session', () => {
@@ -184,11 +180,11 @@ describe('Home — coach week progress row', () => {
     expect(chips()[0].className).toContain('on')
   })
 
-  it('a malformed queue from another client shows the weekday dots, never an empty card', () => {
+  it('a malformed queue from another client still shows the weekly calendar', () => {
     setS({ queue: { ids: 'd1' }, week: { [new Date().getDay()]: ['own'] } })
     mount()
     expect(host.querySelector('.queue')).toBeNull()
-    expect(host.querySelectorAll('.week .wday').length).toBe(7)
+    expect(host.querySelectorAll('.week-calendar-day')).toHaveLength(7)
     expect(todayTitle()).toBe('Core')
   })
 
@@ -210,7 +206,7 @@ describe('Home — coach week progress row', () => {
     expect(host.querySelectorAll('.queue .row .small')[1].textContent).toBe('1 / 3')
   })
 
-  it('a managed pass counts your own day beside it exactly as an external one does — ownership plays no part in the tally', () => {
+  it('a saved personal pass leaves the weekly tally on chosen weekdays', () => {
     const now = Date.now()
     const core = { id: 'w-own', d: todayISO(), start: now - 3600000, end: now, routineIds: ['own'], routineId: 'own', name: 'Core', entries: [] }
     setS({
@@ -219,15 +215,15 @@ describe('Home — coach week progress row', () => {
       week: { [new Date().getDay()]: ['own'] }, workouts: [logged('d1'), core],
     })
     mount()
-    expect(card()).toMatch(/^2 \/ 4 this week · 2 workouts total$/)
-    expect(host.querySelectorAll('.queue .row .small')[1].textContent).toBe('1 of 3 done this round.')
+    expect(card()).toMatch(/^1 \/ 1 this week · 2 workouts total$/)
+    expect(host.querySelector('.queue')).toBeNull()
   })
 
-  it('without a queue the weekday dots are back', () => {
+  it('without a queue the weekly calendar remains', () => {
     setS({ queue: null })
     mount()
     expect(host.querySelector('.queue')).toBeNull()
-    expect(host.querySelectorAll('.wday').length).toBe(7)
+    expect(host.querySelectorAll('.week-calendar-day')).toHaveLength(7)
   })
 })
 
@@ -238,6 +234,7 @@ describe('Home — a session pinned to a day', () => {
     expect(chipTexts()).toEqual(['US W1 D1Done', 'US W1 D2Up next', 'US W1 D3Later'])
     expect(status()).toBe('Next: US W1 D2, today')
     expect(todayTitle()).toBe('US W1 D2')
+    expect(host.querySelector('.week-calendar-day.today').textContent).not.toContain('US W1 D1')
   })
 
   it('a session pinned ahead wears its day, is not lit, and the light moves to the next floating one', () => {
@@ -253,6 +250,16 @@ describe('Home — a session pinned to a day', () => {
     expect(chips()[1].className).toBe('chip on')
     expect(status()).toBe('Next: US W1 D2, today')
     expect(todayTitle()).toBe('US W1 D2')
+  })
+
+  it('shows a pinned coach session beside a fixed routine on that calendar day', () => {
+    const on = daysFromToday(2)
+    const dow = new Date(on + 'T12:00:00').getDay()
+    setS({ dayPlan: { [on]: 'd1' }, week: { [dow]: ['own'] } })
+    mount()
+    const day = [...host.querySelectorAll('.week-calendar-day')].find(el => el.getAttribute('aria-label').includes(fmtDate(on)))
+    expect(day.textContent).toContain('US W1 D1')
+    expect(day.textContent).toContain('Core')
   })
 
   it('a session pinned to today is the day\'s session, ahead of the floating order', () => {
@@ -295,12 +302,20 @@ describe('Home — the today row follows today\'s plan, not just the last sessio
   const at = (id, start, name) => ({ id: 'w-' + id + start, d: today, start, end: start + 1000, routineIds: id ? [id] : [], routineId: id, name: name || routines.find(r => r.id === id).name, entries: [] })
   const tag = () => host.querySelector('.today-row .tag')?.textContent
 
+  it('opens the day plan without starting a workout', () => {
+    setS({ queue: null, week: { [new Date().getDay()]: ['own'] } })
+    mount()
+    act(() => host.querySelector('.today-row').click())
+    expect(dayOverrideSheet).toHaveBeenCalledWith(today)
+    expect(startFlow).not.toHaveBeenCalled()
+  })
+
   it('a queue session done today: the row offers the next one, like the progress row', () => {
     setS({ workouts: [at('d1', Date.now() - 3600000)] })
     mount()
     expect(status()).toBe('Next: US W1 D2, today')
     expect(todayTitle()).toBe('US W1 D2')
-    expect(tag()).toBe('Start')
+    expect(tag()).toBeUndefined()
   })
 
   it('a freestyle session on a planned day leaves the plan offered', () => {
@@ -308,7 +323,7 @@ describe('Home — the today row follows today\'s plan, not just the last sessio
     setS({ queue: null, week: { [wd]: ['own'] }, workouts: [at(null, Date.now() - 3600000, 'Freestyle')] })
     mount()
     expect(todayTitle()).toBe('Core')
-    expect(tag()).toBe('Start')
+    expect(tag()).toBeUndefined()
   })
 
   it('the planned routine done today still reads as done', () => {
@@ -319,7 +334,7 @@ describe('Home — the today row follows today\'s plan, not just the last sessio
     expect(tag()).toBe('Done')
   })
 
-  it('Start new pass after a session today: the pass runs today, from its first session', () => {
+  it("an old strict personal pass does not replace today's weekday plan", () => {
     const now = Date.now()
     setS({
       rotation: { id: 'rot', sequence: ['d1', 'd2', 'd3'], label: 'Rotation' },
@@ -327,28 +342,19 @@ describe('Home — the today row follows today\'s plan, not just the last sessio
       workouts: [at('d1', now - 3600000)],
     })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1Up next', 'US W1 D2Later', 'US W1 D3Later'])
-    expect(status()).toBe('Next: US W1 D1, today')
-    expect(todayTitle()).toBe('US W1 D1')
-    expect(tag()).toBe('Start')
+    expect(chipTexts()).toEqual([])
+    expect(host.querySelector('.queue')).toBeNull()
+    expect(todayTitle()).toBe('US W1 D1 (done)')
   })
 })
 
-describe('Home: your own loop', () => {
-  // QA round 2 (2026-10-06): the loop's name was saved as text in the language it was made in, so
-  // a loop made in English still read "Rotation" after switching to Arabic.
-  it('is called Rotation in the language on screen, whatever an older save kept as its name', async () => {
+describe('Home: a saved personal loop', () => {
+  it('stays archived while a coach week remains visible', () => {
     const rot = { id: 'rot', sequence: ['d1', 'd2'], label: 'Rotation' }
-    try {
-      await setLang('ar')
-      setS({ rotation: rot, scheduleMode: 'rotation', queue: queue({ ids: ['d1', 'd2'], label: 'Rotation', rotationId: 'rot' }) })
-      mount()
-      expect(host.querySelector('.queue .row .small').textContent).toBe('التناوب')
-      setS({ rotation: { ...rot, label: '' }, scheduleMode: 'rotation', queue: queue({ ids: ['d1', 'd2'], label: '', rotationId: 'rot' }) })
-      mount()
-      expect(host.querySelector('.queue .row .small').textContent).toBe('التناوب')
-    } finally { await act(() => setLang('en')) }
-    // A coach's week keeps the name its planner gave it.
+    setS({ rotation: rot, scheduleMode: 'rotation', queue: queue({ ids: ['d1', 'd2'], label: 'Rotation', rotationId: 'rot' }) })
+    mount()
+    expect(host.querySelector('.queue')).toBeNull()
+    expect(useStore.getState().S.rotation).toEqual(rot)
     setS()
     mount()
     expect(host.querySelector('.queue .row .small').textContent).toBe('US W1')

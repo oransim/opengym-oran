@@ -227,7 +227,7 @@ export function buildPlanBundle(S, name) {
   if (!unit) unitError()
   const routines = (S.routines || []).map(r => ({
     id: r.id, name: r.name, emoji: r.emoji,
-    ...(r.kind === 'visit' ? { kind: 'visit' } : {}),
+    ...(['visit', 'exercise-repeat'].includes(r.kind) ? { kind: r.kind } : {}),
     ...(r.prog ? { prog: r.prog } : {}),
     ...(r.excludeFromProgression === true ? { excludeFromProgression: true } : {}),
     ex: (r.ex || []).map(cleanEx)
@@ -261,6 +261,7 @@ export function parsePlan(raw, destinationUnit = 'kg') {
   if (!data || typeof data !== 'object' || Array.isArray(data) || !data.opengym_plan || !Array.isArray(data.routines) || !destination) {
     throw notPlan()
   }
+  if (data.routines.some(r => r?.kind === 'exercise-repeat' && (!Array.isArray(r.ex) || r.ex.length !== 1))) throw notPlan()
   const sourceUnit = declaredPlanUnit(data)
   const customEx = (Array.isArray(data.customEx) ? data.customEx : []).filter(c => c && c.id)
   const known = new Set(customEx.map(c => c.id))
@@ -297,13 +298,15 @@ export function parsePlan(raw, destinationUnit = 'kg') {
       return convertedExercise({ ...passthrough, ...(pyramid.length ? { pyramid } : {}), ...(pyramidRest.length ? { pyramidRest } : {}), ...(pyramidWeight.length ? { pyramidWeight } : {}), ...(warm ? { warmupSets: warm } : {}), ...(intens ? { intensifier: intens } : {}), ...(rest ? { restSec: rest } : restOff ? { restOff: true } : {}), ...(warmOff ? { warmupRestOff: true } : warmRest ? { warmupRestSec: warmRest } : {}), ...(sideOff ? { sideRestOff: true } : sideRest ? { sideRestSec: sideRest } : {}), ...(subs.length ? { subs } : {}), ...(sgName ? { sgName } : {}), ...(sgRest ? { sgRest } : {}), ...(incline > 0 ? { incline } : {}) }, sourceUnit || destination, destination)
     })
   }))
+  if (routines.some(r => r.kind === 'exercise-repeat' && r.ex.length !== 1)) throw notPlan()
   return {
     name: (data.name || '').trim(),
     routines,
     week: data.week || {},
     customEx,
     dropped,
-    routineCount: routines.length,
+    routineCount: routines.filter(r => r.kind !== 'exercise-repeat').length,
+    repeatCount: routines.filter(r => r.kind === 'exercise-repeat').length,
     exerciseCount: routines.reduce((n, r) => n + r.ex.length, 0),
     scheduledDays: WEEK_DAYS.filter(d => data.week?.[d]?.length).length,
     // `unit` is the unit of the returned prescriptions. `sourceUnit` is null for a legacy file;
@@ -345,7 +348,7 @@ export function mergePlan(s, bundle, { schedule } = {}) {
       id: nid,
       name: r.name || t('Shared routine'),
       emoji: r.emoji,
-      ...(r.kind === 'visit' ? { kind: 'visit' } : {}),
+      ...(['visit', 'exercise-repeat'].includes(r.kind) ? { kind: r.kind } : {}),
       ...(r.prog ? { prog: r.prog } : {}),
       ...(r.excludeFromProgression === true ? { excludeFromProgression: true } : {}),
       ex: (r.ex || []).map(e => ({ ...e, id: exIdMap[e.id] || canonicalExId(e.id) }))
@@ -523,7 +526,9 @@ export function planPrintHTML(S, owner, { routineId, probe = false } = {}) {
     ? routines.map((r, i) => routineHTML(r, unit, { bare: !!single, speedUnit, ticks: !!single, lead: i === 0 ? lead : '', m, key: 'r' + i })).join('')
     : `<p class="none">${esc(t('No routines yet.'))}</p>`
   const title = single ? single.name : t('Weekly Training Plan')
-  const facts = single ? [single.kind === 'visit' ? t('Visit') : exCount(single.ex.length)] : [routineCount(routines.length)]
+  const facts = single ? [single.kind === 'visit' ? t('Visit') : exCount(single.ex.length)]
+    : [routineCount(routines.filter(r => r.kind !== 'exercise-repeat').length),
+      ...(routines.some(r => r.kind === 'exercise-repeat') ? [t('{0} exercise repeats', routines.filter(r => r.kind === 'exercise-repeat').length)] : [])]
   return printShell({
     title, kicker: single ? t('Routine') : t('Training plan'), facts, owner, date: todayISO(),
     body: (routineId ? '' : weekHTML(S, m)) + body,

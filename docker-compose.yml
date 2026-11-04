@@ -4,15 +4,18 @@ services:
   # Passkey auth + per-user data (Node, no framework).
   # image: prebuilt (docker compose pull). build: from source (docker compose up --build).
   api:
-    image: ghcr.io/oransim/opengym-oran-api:edge
+    image: &api-image ghcr.io/oransim/opengym-oran-api:${IMAGE_TAG:-edge}
     # Default target: no AI runtime, no AI dependency — the image every instance has always had.
     # To opt into the AI Coach, build the other target instead:
     #     API_TARGET=coach docker compose up --build api
     # `--build` matters: with an `image:` also set, compose would otherwise pull the prebuilt
     # default rather than build the coach one.
-    build:
+    build: &api-build
       context: ./api
       target: ${API_TARGET:-default}
+    depends_on:
+      data-permissions:
+        condition: service_completed_successfully
     restart: unless-stopped
     env_file: .env
     environment:
@@ -32,10 +35,26 @@ services:
       # needs backing up — if you lose it, sign the provider in again.
       - ./coach-auth:/coach-auth
 
+  # Existing installations wrote ./data as root. This short-lived helper migrates ownership
+  # before the unprivileged API starts, including after a backup restore. It has no network or
+  # application process; only the data mount is writable.
+  data-permissions:
+    image: *api-image
+    build: *api-build
+    user: "0:0"
+    command: ["chown", "-R", "10001:10001", "/data"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./data:/data
+
   # Builds the React frontend (multi-stage) and serves it, proxying /api → api
   # and the exercise animations, which are part of the image. Single origin for passkeys.
   web:
-    image: ghcr.io/oransim/opengym-oran-web:edge
+    image: ghcr.io/oransim/opengym-oran-web:${IMAGE_TAG:-edge}
     build:
       context: .
       dockerfile: web/Dockerfile
@@ -44,7 +63,7 @@ services:
       api:
         condition: service_started
     ports:
-      - "${WEB_PORT:-8080}:${NGINX_PORT:-80}"
+      - "${WEB_PORT:-127.0.0.1:8080}:${NGINX_PORT:-80}"
     # nginx renders its config at start-up from these (web/nginx.conf.template),
     # so the API service does not have to be called `api`. Defaults are the old
     # hardcoded values, so an existing .env and an existing stack are unaffected.

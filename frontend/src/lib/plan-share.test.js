@@ -74,6 +74,47 @@ describe('plan-share units', () => {
   })
 })
 
+describe('standalone exercise repeats in a shared plan', () => {
+  const source = () => ({ unit: 'kg', customEx: [], week: { 1: ['r', 'e1'], 4: ['e2'] }, routines: [
+    { id: 'r', name: 'Routine', ex: [{ id: '0025', sets: 2, reps: 8 }] },
+    { id: 'e1', name: 'Stretch A', kind: 'exercise-repeat', ex: [{ id: '0025', sets: 3, reps: 5, weight: 60 }] },
+    { id: 'e2', name: 'Stretch B', kind: 'exercise-repeat', ex: [{ id: '0025', sets: 5, reps: 10, weight: 20 }] },
+  ] })
+
+  it('keeps two rules for one exercise independent across export, unit conversion and scheduled import', () => {
+    const bundle = buildPlanBundle(source(), 'Repeats')
+    expect(bundle.routines.slice(1).map(r => r.kind)).toEqual(['exercise-repeat', 'exercise-repeat'])
+    const parsed = parsePlan(bundle, 'lb')
+    expect(parsed.routineCount).toBe(1)
+    expect(parsed.repeatCount).toBe(2)
+    expect(parsed.routines.slice(1).map(r => r.ex[0].weight)).toEqual([132.5, 44])
+    const target = { unit: 'lb', customEx: [], week: { 2: ['old'] }, routines: [{ id: 'old', name: 'Old', ex: [] }] }
+    mergePlan(target, parsed, { schedule: true })
+    const [a, b] = target.routines.slice(2)
+    expect(a.kind).toBe('exercise-repeat')
+    expect(b.kind).toBe('exercise-repeat')
+    expect(a.id).not.toBe(b.id)
+    expect(target.week[1]).toEqual([target.routines[1].id, a.id])
+    expect(target.week[4]).toEqual([b.id])
+  })
+
+  it('imports rules with their schedule off when the schedule option is off', () => {
+    const parsed = parsePlan(buildPlanBundle(source(), 'Repeats'))
+    const target = { unit: 'kg', customEx: [], week: { 2: ['old'] }, routines: [{ id: 'old', name: 'Old', ex: [] }] }
+    mergePlan(target, parsed, { schedule: false })
+    expect(target.routines.filter(r => r.kind === 'exercise-repeat')).toHaveLength(2)
+    expect(target.week).toEqual({ 2: ['old'] })
+  })
+
+  it('rejects a repeat with zero or multiple exercises', () => {
+    for (const ex of [[], [{ id: '0025' }, { id: '0025' }]]) {
+      const bundle = buildPlanBundle(source(), 'Repeats')
+      bundle.routines[1].ex = ex
+      expect(() => parsePlan(bundle)).toThrow()
+    }
+  })
+})
+
 describe('what survives a shared plan', () => {
   it('carries Per side on a timed hold, and on reps work; never on cardio', () => {
     const hold = roundTrip({ mode: 'time', sec: 30, sets: 2, reps: undefined, weight: undefined, side: true })

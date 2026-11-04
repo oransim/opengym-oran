@@ -800,7 +800,7 @@ paths:
         For browsers that cannot make a passkey (plain http on a LAN address, some Firefox
         setups). Creates the profile and signs it in. The same invite rules as passkey
         registration apply: on an invite-only instance the code is checked first, checked
-        again after hashing, and burned. The password must be 10–256 characters and not one
+        again after hashing, and burned. The password must be 15–256 characters and not one
         of the passwords guessing scripts try first; no two profiles with a password may
         share a name. An optional `email` is stored as the profile's sign-in e-mail (see
         `POST /api/account/email`); one that is not an address is refused with `400
@@ -818,7 +818,7 @@ paths:
               required: [name, password]
               properties:
                 name: { type: string, maxLength: 40 }
-                password: { type: string, minLength: 10, maxLength: 256 }
+                password: { type: string, minLength: 15, maxLength: 256 }
                 code: { type: string, description: Invite code (INVITE_ONLY only). }
                 email: { type: string, maxLength: 254, description: Optional sign-in e-mail. }
             example: { name: "Ada", password: "correct horse battery staple", code: "3F9C21A07B54D688" }
@@ -837,14 +837,14 @@ paths:
                   user: { $ref: '#/components/schemas/SessionUser' }
         '400':
           description: >-
-            The password breaks the length policy with `too-short` (under 6 characters) or
-            `too-long` (over 256); a field is `missing`; or `email-invalid`: the
+            The password breaks the policy with `too-short` (under 15 characters),
+            `too-long` (over 256), or `too-common`; a field is `missing`; or `email-invalid`: the
             `email` given is not an e-mail address.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
               examples:
-                policy: { value: { error: "the password needs at least 6 characters", code: "too-short" } }
+                policy: { value: { error: "the password needs at least 15 characters", code: "too-short" } }
                 email: { value: { error: "that is not an e-mail address", code: "email-invalid" } }
         '403':
           description: Invite-only and the code is missing, used or revoked.
@@ -889,7 +889,7 @@ paths:
                 name: { type: string, description: The original field; an e-mail works here too. }
                 email: { type: string }
                 code: { type: string, example: "K7WQ-2MZP-4HXA" }
-                next: { type: string, minLength: 10, maxLength: 256 }
+                next: { type: string, minLength: 15, maxLength: 256 }
       responses:
         '200':
           description: Password set and signed in. The session cookie is set.
@@ -966,7 +966,7 @@ paths:
               type: object
               required: [next]
               properties:
-                next: { type: string, minLength: 10, maxLength: 256 }
+                next: { type: string, minLength: 15, maxLength: 256 }
                 current: { type: string }
                 cid: { type: string }
                 credential: { $ref: '#/components/schemas/WebAuthnAuthenticationCredential' }
@@ -3395,12 +3395,12 @@ components:
           example: { error: "the server is busy, try again in a moment", code: "busy" }
     PasswordPolicy:
       description: >-
-        The new password breaks the length policy (`too-short` under 6 characters
-        or `too-long` over 256), or a field is `missing`.
+        The new password breaks the policy (`too-short` under 15 characters,
+        `too-long` over 256, or `too-common`), or a field is `missing`.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-          example: { error: "the password needs at least 6 characters", code: "too-short" }
+          example: { error: "the password needs at least 15 characters", code: "too-short" }
     NameTaken:
       description: >-
         Another profile already signs in with this name, or holds it with a reset code
@@ -3670,6 +3670,12 @@ components:
           description: >-
             Per-date overrides: ISO date → routine id, or "rest". Wins over `week`.
           additionalProperties: { type: string }
+        dayPlanSkip:
+          type: object
+          description: 'Per-date skipped routine IDs: ISO date → IDs omitted on that date without changing the weekly schedule.'
+          additionalProperties:
+            type: array
+            items: { type: string }
         bodyweight:
           type: array
           items: { $ref: '#/components/schemas/BodyweightEntry' }

@@ -39,7 +39,7 @@ describe('RoutineEdit — Add exercise at the top', () => {
   it('lets a visit be named without showing exercise or progression controls', () => {
     mount([], 'visit')
     expect(host.querySelector('input')?.value).toBe('Push day')
-    expect(host.textContent).toContain('Gym or class visit')
+    expect(host.textContent).toContain('Name this class, add it to your schedule')
     expect(addButton()).toBeUndefined()
     expect(host.textContent).not.toContain('Progression')
   })

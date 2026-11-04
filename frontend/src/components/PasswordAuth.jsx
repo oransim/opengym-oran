@@ -18,7 +18,7 @@ import { Row, Button } from './ui.jsx'
 
 // The server's floor (api/password.js MIN_LENGTH), checked here first so the common mistake is
 // answered without a round trip. The server still decides.
-export const MIN_PASSWORD = 6
+export const MIN_PASSWORD = 15
 export const passwordOn = config => !!config?.password_login
 // An address the way the server stores and compares it (nameKey in api/password.js): NFKC,
 // trimmed, lower-cased.
@@ -51,6 +51,7 @@ export function passwordError(e) {
   switch (code) {
     case 'bad-credentials': return t('Wrong name, e-mail or password.')
     case 'too-short': return t('Use at least {0} characters.', MIN_PASSWORD)
+    case 'too-common': return t('That password is too easy to guess. Try a longer one, or a few random words strung together.')
     case 'too-long': return t('That password is too long.')
     case 'name-taken': return t('Another profile already signs in with this name.')
     case 'email-invalid': return t('That is not an e-mail address.')

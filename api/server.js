@@ -99,12 +99,9 @@ const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 
 fs.mkdirSync(DATA, { recursive: true });
 /* The secrets are locked down file by file rather than by sealing the whole directory.
- *
- * A blanket `chmod 0700` on DATA looks stronger and is worse: ./data is a host bind mount and
- * this container runs as root, so it lands on the host as root-owned 0700 and anything else
- * the owner runs against their own data directory — a backup script, the MCP server in #19,
- * their own `jq` — gets EACCES on files that are theirs. Locking the four files that actually
- * hold secrets keeps the Coach runtime out of them without taking the directory hostage.
+ * The default image runs as its own uid and Compose first migrates the bind-mounted data tree
+ * to that uid. Individual 0600 secrets also stay unreadable to the separate `coach` uid used
+ * by the optional provider image.
  *
  * Best-effort throughout: a bind-mounted host filesystem may refuse chmod, and that is not a
  * reason to refuse to boot. The privilege drop in adapters/spawn.js is the control that does
@@ -1232,6 +1229,7 @@ const publicUser = u => ({ id: u.id, name: u.name, admin: isAdmin(u), ...(isOwne
 const POLICY_ERRORS = {
   'too-short': `the password needs at least ${MIN_LENGTH} characters`,
   'too-long': `the password can have at most ${MAX_LENGTH} characters`,
+  'too-common': 'choose a less common password',
 };
 const policyError = (res, problem) => json(res, 400, { error: POLICY_ERRORS[problem], code: problem });
 const WRONG = { error: 'wrong name or password', code: 'bad-credentials' };

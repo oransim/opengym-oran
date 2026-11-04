@@ -44,6 +44,10 @@ RUN apk upgrade --no-cache
 # image" — including the fixture provider that exists precisely so the loop can be walked before
 # an account is connected. It costs one line and no bytes worth measuring.
 RUN adduser -D -H -s /sbin/nologin coach
+# The normal API has its own uid. The one-shot Compose data-permissions service owns the
+# bind-mounted /data tree for this uid before the server starts. The optional Coach target
+# deliberately stays root so it can spawn provider jobs as the separate `coach` uid.
+RUN addgroup -S -g 10001 gym && adduser -S -D -H -u 10001 -G gym -s /sbin/nologin gym
 
 COPY package.json package-lock.json* ./
 # `npm ci` rather than `npm install`: the lockfile is the point of committing one, and the SDK's
@@ -54,6 +58,7 @@ RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 # Every module server.js imports from the api root has to be named here: the image carries nothing
 # else, and one that is missing only shows at boot, as ERR_MODULE_NOT_FOUND.
 COPY server.js push-messages.js nudge.js nudge-copy.js verify-error.js password.js rate-limit.js passkeys-store.js device-link.js media.js queue.js sync-stamps.js durable.js admin-socket.js recover.js ./
+COPY shared ./shared
 COPY coach ./coach
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -94,3 +99,5 @@ FROM base AS default
 # every vulnerability the image scan ever reported lived — none of them was in a package the
 # app uses. Gone from the published image; the coach target keeps npm for the Codex CLI.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+RUN mkdir -p /data && chown gym:gym /data
+USER 10001:10001

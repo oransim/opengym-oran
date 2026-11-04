@@ -4,7 +4,7 @@ import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, byCategory, smOf, searchExercises, similarExercises, exOr, isAssisted, betterWeight, beatsWeight, isCustomEx } from './lib/exercises.js'
 import { activeProfile, exAvailable, ALL_EQUIPMENT, newProfile, profileEquipment, ACC_V } from './lib/equipment.js'
 import { fmtDate, fmtDateRange, fmtNum, fmtPlate, exerciseNameText, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, routineCount, setsWorkCount, DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, effectiveRoutineIds, workoutDay, workoutVolume, sessionVolume, countsWarmups, setsDone, setsDoneActive, setUnitsTotal, lastBW, sessionSections, setLabel, defaultConfig, pickedExerciseConfig, cleanupSg, modeOf, effortOf, EFFORT, capEffort, stepEffort, isBw, isPerSide, sideReps, workSetsDone, applyIntensifierPlan, MAX_PLANNED_WARMUPS, NOTE_MAX } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, effectiveRoutineIds, workoutDay, workoutVolume, sessionVolume, countsWarmups, setsDone, setsDoneActive, setUnitsTotal, lastBW, sessionSections, setLabel, defaultConfig, pickedExerciseConfig, freestyleConfig, cleanupSg, modeOf, effortOf, EFFORT, capEffort, stepEffort, isBw, isPerSide, sideReps, workSetsDone, applyIntensifierPlan, MAX_PLANNED_WARMUPS, NOTE_MAX } from './lib/history.js'
 import { usesBar, hasBarOverride, isNoBar, barTypeWeight, ownBarDefault, barPicks, withBarDefault, withStandardBars, defaultBarWeight, BAR_TYPES } from './lib/bar.js'
 import { PLATE_SIZES, pairsOf, ownsPlates, withPlatePairs, withStandardPlates, withLoadKind, loadKindFor, baseWeightFor, dropGrid } from './lib/plates.js'
 import { toScale, rirOf, EFFORT_PRESETS, effortColor } from './lib/effort.js'
@@ -74,8 +74,11 @@ import { weeklyWeights } from './lib/bodyweight.js'
 import { workoutText } from './lib/workout-text.js'
 import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, CARD_FONT } from './lib/workout-card.js'
 import { copyText } from './lib/clipboard.js'
-import { queueRemaining, pinState } from './lib/queue.js'
+import { queueRemaining, pinState, queueOf } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
+import { isExerciseRepeat, makeExerciseRepeat } from './lib/exercise-repeat.js'
+import { skippedOn, activeSkippedOn, skipOnDate, restoreOnDate } from './lib/day-plan-skip.js'
+import { deleteRoutine } from './lib/routines.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -1268,14 +1271,14 @@ function AddToRoutine({ ex, close }) {
       })
       const r = isNew ? S().routines[S().routines.length - 1] : st.routines.find(x => x.id === rid)
       toast(t('“{0}” added to {1}', exerciseNameText(ex), r ? r.name : t('routine')))
-      if (isNew && r) nav('/plan/r/' + r.id)
+      if (isNew && r) nav('/routines/r/' + r.id)
     }, null, isNew ? null : st.routines.find(x => x.id === rid))
   }
   return <>
     <h3 className={exerciseNameClass(ex)}>{t('Add “{0}”', exerciseNameFor(ex))}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Pick a routine. Sets, reps and weight come next.')}</div>
     <div className="list">
-      {st.routines.filter(r => r.kind !== 'visit').map(r => <div key={r.id} className="item" {...tappable(() => pick(r.id))}>
+      {st.routines.filter(r => r.kind !== 'visit' && !isExerciseRepeat(r)).map(r => <div key={r.id} className="item" {...tappable(() => pick(r.id))}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
         {r.ex.some(e => e.id === ex.id) && <span className="tag">{t('already in')}</span>}<Icon name="plus" className="chev" />
@@ -2512,13 +2515,16 @@ function PlanImport({ bundle, close }) {
   const apply = () => {
     update(s => mergePlan(s, bundle, { schedule }))
     close()
-    toast(tn('Added {0} routine to your plan', 'Added {0} routines to your plan', bundle.routineCount))
+    const parts = [bundle.routineCount ? routineCount(bundle.routineCount) : null,
+      bundle.repeatCount ? t(bundle.repeatCount === 1 ? '{0} exercise repeat' : '{0} exercise repeats', bundle.repeatCount) : null].filter(Boolean)
+    toast(t('Added {0} to your plan', parts.join(' and ')))
     nav('/plan')
   }
   return <>
     <h3>{bundle.name ? t('Import “{0}”', bundle.name) : t('Import this plan')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>
-      {routineCount(bundle.routineCount)}
+      {[bundle.routineCount ? routineCount(bundle.routineCount) : null,
+        bundle.repeatCount ? t(bundle.repeatCount === 1 ? '{0} exercise repeat' : '{0} exercise repeats', bundle.repeatCount) : null].filter(Boolean).join(' · ')}
       {' · ' + exCount(bundle.exerciseCount)}
       {bundle.scheduledDays > 0
         ? ' · ' + tn('scheduled on {0} day', 'scheduled on {0} days', bundle.scheduledDays)
@@ -2541,16 +2547,228 @@ function PlanImport({ bundle, close }) {
 }
 
 /* ============================ day override / assign ============================ */
+// All three schedulable types use the same weekday references. An exercise gets its own hidden
+// one-exercise template so two schedules of the same catalogue exercise remain independent.
+const scheduledDaysOf = (st, id) => weekOrder(weekStartOf(st)).filter(d => [].concat(st.week?.[d] || []).includes(id))
+const setScheduledDays = (st, id, days) => {
+  st.week ||= {}
+  for (let d = 0; d < 7; d++) {
+    const before = [].concat(st.week?.[d] || []).filter(x => x !== id)
+    const next = days.includes(d) ? [...before, id] : before
+    if (next.length) st.week[d] = next
+    else delete st.week[d]
+  }
+}
+
+function ScheduleDays({ routineId, exId, config, initialDay, close }) {
+  const st = useStore(s => s.S)
+  const existing = st.routines.find(r => r.id === routineId)
+  const [days, setDays] = useState(() => {
+    const saved = routineId ? scheduledDaysOf(st, routineId) : []
+    return saved.length ? saved : Number.isInteger(initialDay) ? [initialDay] : []
+  })
+  const [target, setTarget] = useState(config || existing?.ex?.[0] || null)
+  const repeat = !!exId || isExerciseRepeat(existing)
+  const id = exId || existing?.ex?.[0]?.id
+  const save = () => {
+    if (!days.length) return
+    update(s => {
+      const rid = routineId || uid()
+      if (!routineId) s.routines.push(makeExerciseRepeat(id, target, rid))
+      else if (repeat) {
+        const r = s.routines.find(x => x.id === rid)
+        if (r) r.ex[0] = { ...target, id }
+      }
+      setScheduledDays(s, rid, days)
+    })
+    close()
+  }
+  const editTarget = () => {
+    const ex = allExercises(st).find(x => x.id === id) || exOr(id)
+    exConfigSheet(ex, target, cfg => { setTarget(cfg) }, null, existing, target, null, t('Save target'))
+  }
+  const remove = () => {
+    update(s => { deleteRoutine(s, routineId) })
+    close()
+  }
+  if (!existing && !exId) return null
+  return <>
+    <h3>{existing?.name || t('Schedule exercise')}</h3>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Choose the days to repeat every week.')}</div>
+    {repeat && <div className="item" {...tappable(editTarget)}>
+      <span className="lrow-i"><Icon name="pencil" /></span><div className="grow"><div className="tt">{t('Exercise target')}</div>
+        <div className="ss">{target?.sets || 1} × {target?.mode === 'time' ? `${target?.sec || 45}s` : target?.reps || target?.min || 10}</div></div>
+      <Icon name="chevronRight" className="chev" />
+    </div>}
+    <div className="chips plan-weekday-chips" style={{ margin: '14px 0' }}>
+      {weekOrder(weekStartOf(st)).map(d => <button key={d} type="button" className={'chip' + (days.includes(d) ? ' on' : '')}
+        aria-label={t(DAYN[d])} aria-pressed={days.includes(d)} onClick={() => setDays(list => list.includes(d) ? list.filter(x => x !== d) : [...list, d])}>{t(DAYS[d])}</button>)}
+    </div>
+    <Button variant="primary" disabled={!days.length} onClick={save}>{t('Save schedule')}</Button>
+    {repeat && routineId && <><div style={{ height: 8 }} /><Button variant="ghost" icon="trash" onClick={remove}>{t('Delete repeat')}</Button></>}
+  </>
+}
+export const repeatDaysSheet = id => ui().openSheet(close => <ScheduleDays routineId={id} close={close} />)
+export const scheduleDaysSheet = id => ui().openSheet(close => <ScheduleDays routineId={id} close={close} />)
+
+function ScheduleSaved({ kind, initialDay, close }) {
+  const st = useStore(s => s.S)
+  const choices = st.routines.filter(r => kind === 'class' ? r.kind === 'visit' : r.kind !== 'visit' && !isExerciseRepeat(r))
+  const create = () => {
+    const r = { id: uid(), name: kind === 'class' ? t('New class') : t('New routine'), emoji: kind === 'class' ? 'stretch' : DEFAULT_GLYPH,
+      ...(kind === 'class' ? { kind: 'visit' } : {}), ex: [] }
+    update(s => {
+      s.routines.push(r)
+      if (Number.isInteger(initialDay)) s.week[initialDay] = [...new Set([...[].concat(s.week[initialDay] || []), r.id])]
+    })
+    closeThenNav(close, '/routines/r/' + r.id)
+  }
+  return <>
+    <h3>{kind === 'class' ? t('Choose a class') : t('Choose a routine')}</h3>
+    <div className="list menu-list">{choices.map(r => <div key={r.id} className="item menu-item" {...tappable(() => {
+      close(); ui().openSheet(done => <ScheduleDays routineId={r.id} initialDay={initialDay} close={done} />)
+    })}><span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span><div className="grow"><div className="tt">{r.name}</div></div><Icon name="chevronRight" className="chev" /></div>)}</div>
+    <div style={{ marginTop: 12 }}><Button size="sm" variant="tinted" icon="plus" onClick={create}>{kind === 'class' ? t('Create class') : t('Create routine')}</Button></div>
+  </>
+}
+
+function scheduleExerciseSheet(day) {
+  const picker = exercisePicker(ex => {
+    picker.close()
+    exConfigSheet(ex, null, cfg => ui().openSheet(close => <ScheduleDays exId={ex.id} config={cfg} initialDay={day} close={close} />),
+      null, null, null, null, t('Choose target'))
+  }, { title: t('Choose exercise') })
+}
+
+export function scheduleItemSheet({ day } = {}) {
+  menuSheet({ title: t('Schedule'), items: [
+    { icon: 'figureStrength', label: t('Routine'), onClick: () => ui().openSheet(close => <ScheduleSaved kind="routine" initialDay={day} close={close} />) },
+    { icon: 'stretch', label: t('Class'), onClick: () => ui().openSheet(close => <ScheduleSaved kind="class" initialDay={day} close={close} />) },
+    { icon: 'dumbbell', label: t('Exercise'), onClick: () => scheduleExerciseSheet(day) },
+  ] })
+}
+
+// A calendar day is an entry point into the repeating weekday plan. Pick an exercise without
+// first making a routine: an empty weekday gets one when the exercise is actually saved. A
+// routine reused on another weekday is not edited silently, because that would change both days.
+function addWeekdayExercise(day, closeDay) {
+  closeDay()
+  scheduleExerciseSheet(day)
+}
+
+// Older one-day exercise bookings were named for their date; newer ones carry the date
+// explicitly. Only edit them in place when no other plan entry refers to the routine.
+function isDateExerciseRoutine(s, routine, iso) {
+  if (!routine || routine.kind === 'visit' || (routine.dateOnly !== iso && routine.name !== fmtDate(iso, true))) return false
+  const id = routine.id
+  return !Object.values(s.week || {}).some(ids => [].concat(ids).includes(id))
+    && !Object.entries(s.dayPlan || {}).some(([date, rid]) => date !== iso && rid === id)
+    && !queueOf(s)?.ids.includes(id) && !(s.rotation?.sequence || []).includes(id)
+}
+
+// Home's dated calendar is different from Plan's repeating weekday editor. Today and future
+// dates book a one-day routine; a past date opens the backfill flow.
+function addDateExercise(iso, closeDay) {
+  closeDay()
+  const picker = exercisePicker((ex, quick) => {
+    const add = cfg => {
+      picker.close()
+      if (iso < todayISO()) {
+        logPastWorkoutSheet({ iso, exercise: { id: ex.id, cfg, quick } })
+        return
+      }
+      if (iso >= todayISO()) {
+        update(s => {
+          const currentId = s.dayPlan?.[iso]
+          let routine = s.routines.find(r => r.id === currentId)
+          const reused = !isDateExerciseRoutine(s, routine, iso)
+          if (reused) {
+            // A per-date override replaces the usual plan. Copy its exercises into the one-off
+            // routine first, so adding one does not discard the rest of that day's work.
+            const originals = effectiveRoutineIds(s, iso).filter(id => !(queueOf(s)?.ids || []).includes(id))
+            const exercises = originals.flatMap(id => s.routines.find(r => r.id === id)?.ex || []).map(e => structuredClone(e))
+            routine = { id: uid(), name: fmtDate(iso, true), emoji: DEFAULT_GLYPH, dateOnly: iso, ex: exercises }
+            s.routines.push(routine)
+            s.dayPlan[iso] = routine.id
+          }
+          routine.ex.push({ id: ex.id, ...cfg })
+          restoreOnDate(s, iso, routine.id)
+        })
+        toast(t('“{0}” added to {1}', exerciseNameText(ex), fmtDate(iso, true)))
+        if (iso === todayISO()) routinePreviewSheet(S().dayPlan[iso], iso)
+        return
+      }
+    }
+    if (quick) add(pickedExerciseConfig(ex.id))
+    else exConfigSheet(ex, null, add, null, null, null, null, t('Add to this workout'))
+  })
+}
+
+function RoutinePreview({ routineId, iso, close }) {
+  const st = useStore(s => s.S)
+  const currentId = iso ? st.dayPlan[iso] : routineId
+  const routine = st.routines.find(r => r.id === currentId)
+  if (!routine) return null
+  const start = () => {
+    close()
+    if (S().active) { navToWorkout(); return }
+    startFlow([currentId])
+  }
+  const removeExercise = index => {
+    update(s => {
+      const source = s.routines.find(r => r.id === s.dayPlan[iso])
+      if (!source?.ex?.[index]) return
+      const remaining = source.ex.filter((_, i) => i !== index)
+      const dateOnly = isDateExerciseRoutine(s, source, iso)
+      if (!remaining.length) {
+        s.dayPlan[iso] = 'rest'
+        if (dateOnly) s.routines = s.routines.filter(r => r.id !== source.id)
+      } else if (dateOnly) source.ex = remaining
+      else {
+        const copy = { ...structuredClone(source), id: uid(), name: fmtDate(iso, true), dateOnly: iso, ex: remaining }
+        s.routines.push(copy)
+        s.dayPlan[iso] = copy.id
+      }
+    })
+    if (S().dayPlan[iso] === 'rest') close()
+  }
+  return <>
+    <h3>{routine.name}</h3>
+    <div className="small muted" style={{ marginBottom: 12 }}>{routine.kind === 'visit' ? t('Class') : t('Routine')}</div>
+    {routine.ex?.length > 0 && <div className="list" style={{ marginBottom: 16 }}>
+      {routine.ex.map((entry, index) => {
+        const ex = EXIDX[entry.id]
+        return <div className="item" key={index}>
+          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="dumbbell" /></span>
+          <div className="grow"><div className="tt">{ex ? exerciseNameText(ex) : entry.n || entry.id}</div></div>
+          {iso && <button type="button" className="iconbtn" aria-label={t('Remove {0}', ex ? exerciseNameText(ex) : entry.n || entry.id)} onClick={() => removeExercise(index)}><Icon name="trash" /></button>}
+        </div>
+      })}
+    </div>}
+    <Button variant="primary" icon="play" onClick={start}>{st.active ? t('Resume') : t('Start')}</Button>
+  </>
+}
+export const routinePreviewSheet = (routineId, iso) => ui().openSheet(close => <RoutinePreview routineId={routineId} iso={iso} close={close} />)
+
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)
   const hasOvr = st.dayPlan[iso] !== undefined
+  const skipped = activeSkippedOn(st, iso)
+  const bookedRoutine = st.routines.find(r => r.id === st.dayPlan[iso] && !isExerciseRepeat(r) && !skipped.includes(r.id))
+  const weekday = new Date(`${iso}T12:00:00`).getDay()
+  const queueIds = queueOf(st)?.ids || []
+  const weeklyAssignments = [].concat(st.week?.[weekday] || []).filter(id => !queueIds.includes(id))
+    .map(id => st.routines.find(r => r.id === id)).filter(Boolean)
+  const weeklyBookings = weeklyAssignments.filter(r => !skipped.includes(r.id) && r.id !== bookedRoutine?.id)
   // A fulfilled pin (a coach session pinned here and since done) reads as no override, as it does
   // everywhere else — the row to clear the leftover entry stays.
-  const changed = hasOvr && pinState(st, st.dayPlan[iso]) !== 'done'
+  const changed = (hasOvr && pinState(st, st.dayPlan[iso]) !== 'done') || skipped.length > 0
   // The plan the day would have without its override — the weekday's routines, and in a coach
   // week the queue's session for the day in front of them, same as the Home row shows.
   const { [iso]: _ovr, ...noOvr } = st.dayPlan
-  const weeklyNames = effectiveRoutineIds({ ...st, dayPlan: noOvr }, iso).map(id => st.routines.find(r => r.id === id)?.name).filter(Boolean)
+  const weeklyIds = effectiveRoutineIds({ ...st, dayPlan: noOvr, dayPlanSkip: { ...st.dayPlanSkip, [iso]: [] } }, iso)
+  const weeklyNames = [...weeklyIds, ...weeklyAssignments.filter(isExerciseRepeat).map(r => r.id)]
+    .map(id => st.routines.find(r => r.id === id)?.name).filter(Boolean)
   // A weekday can hold several routines; the per-date override stays single-pick, so picking
   // one here collapses a combined day to it (docs/dev/COMBINE_ROUTINES.md §8). The check marks
   // show everything currently planned for the day.
@@ -2564,27 +2782,50 @@ function DayOverride({ iso, close }) {
   // logged, kept in view on any day that already has one. Quiet on purpose: a row, not a button.
   const note = dayNoteOf(st, iso)
   const canNote = !!note || (canNoteDay(iso) && !workoutsOn(st, iso).length)
-  // The coach week's sessions still to do come first, in slot order: picking one here pins it
-  // to this day — the same per-date override, read back by queueNext (lib/queue.js). A session
-  // already pinned to another day says so in place of its exercise count. Done sessions and
-  // your own routines follow in the plain list.
+  // The coach week's sessions still to do come first inside the appropriate picker. Picking
+  // one pins it to this day; an existing pin to another day is shown in its subtitle.
   const remaining = queueRemaining(st)
   // Your own rotation's pass (its rotationId matches the saved rotation) is your loop, not a coach's week.
   const ownLoop = !!st.queue && !!st.rotation && st.queue.rotationId === st.rotation.id
-  const coach = remaining.map(id => st.routines.find(r => r.id === id)).filter(Boolean)
   // Active pins straight from the plan (earliest day per session, today or later) — not the
   // row's 'pinned' items, which leave out the session pinned to today itself.
   const pinnedOn = Object.entries(st.dayPlan).filter(([d, id]) => d >= todayISO() && remaining.includes(id)).sort()
     .reduce((m, [d, id]) => (m[id] ? m : { ...m, [id]: d }), {})
   const set = v => {
-    update(s => { if (!v) delete s.dayPlan[iso]; else s.dayPlan[iso] = v })
+    update(s => { if (!v) delete s.dayPlan[iso]; else s.dayPlan[iso] = v; if (v && v !== 'rest') restoreOnDate(s, iso, v) })
     close()
     toast(v === '' ? t('Back to weekly plan') : v === 'rest' ? t('{0} set to rest', fmtDate(iso)) : t('{0} planned for {1}', (st.routines.find(r => r.id === v) || {}).name, fmtDate(iso)))
   }
-  const row = r => <div key={r.id} className="item" {...tappable(() => set(r.id))}>
-    <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-    <div className="grow"><div className="tt">{r.name}</div><div className="ss">{pinnedOn[r.id] && pinnedOn[r.id] !== iso ? fmtDate(pinnedOn[r.id], true) : r.kind === 'visit' ? t('Visit') : exCount(r.ex.length)}</div></div>
-    {effIds.includes(r.id) && <Icon name="check" className="accent" />}</div>
+  const openRoutine = (id, dated = false) => { close(); routinePreviewSheet(id, dated ? iso : null) }
+  const removeWeeklyBooking = id => update(s => skipOnDate(s, iso, id))
+  const restoreSkipped = id => update(s => restoreOnDate(s, iso, id))
+  const choose = r => {
+    if (iso < todayISO()) { close(); logPastWorkoutSheet({ iso, routineIds: [r.id] }) }
+    else set(r.id)
+  }
+  const openChoices = kind => {
+    const available = st.routines.filter(r => !isExerciseRepeat(r) && (r.kind === 'visit' ? 'class' : 'routine') === kind)
+    const item = r => ({
+      icon: glyphOf(r.emoji), label: r.name,
+      sub: pinnedOn[r.id] && pinnedOn[r.id] !== iso ? fmtDate(pinnedOn[r.id], true) : r.kind === 'visit' ? t('Class') : exCount(r.ex.length),
+      on: effIds.includes(r.id), onClick: () => choose(r),
+    })
+    const queued = remaining.map(id => available.find(r => r.id === id)).filter(Boolean)
+    const saved = available.filter(r => !remaining.includes(r.id))
+    const create = () => {
+      const r = { id: uid(), name: kind === 'class' ? t('New class') : t('New routine'), emoji: kind === 'class' ? 'stretch' : DEFAULT_GLYPH, ...(kind === 'class' ? { kind: 'visit' } : {}), ex: [] }
+      update(s => { s.routines.push(r) })
+      closeThenNav(close, '/routines/r/' + r.id)
+    }
+    menuSheet({
+      title: kind === 'class' ? t('Add class') : t('Add routine'),
+      sections: [
+        { title: queued.length ? ownLoop ? t('Your loop') : t('Coach week') : null, items: queued.map(item) },
+        { title: queued.length && saved.length ? kind === 'class' ? t('Your classes') : t('Your routines') : null, items: saved.map(item) },
+        { items: [{ icon: 'plus', label: kind === 'class' ? t('Create class') : t('Create routine'), onClick: create }] },
+      ],
+    })
+  }
   return <>
     <h3>{fmtDate(iso, true)}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
@@ -2598,12 +2839,41 @@ function DayOverride({ iso, close }) {
         <Icon name={note ? 'pencil' : 'plus'} className="chev" />
       </div>
     </div>}
-    {coach.length > 0 && <>
-      <h4 className="sec" style={{ marginTop: 0 }}>{ownLoop ? t('Your loop') : t('Coach week')}</h4>
-      <div className="list" style={{ marginBottom: 8 }}>{coach.map(row)}</div>
-    </>}
+    <div style={{ marginBottom: 14 }}>
+      <div className="day-override-actions">
+        <Button size="sm" variant="tinted" icon="plus" onClick={() => addDateExercise(iso, close)}>{t('Add exercise')}</Button>
+        <Button size="sm" variant="tinted" icon="plus" onClick={() => openChoices('routine')}>{t('Add routine')}</Button>
+        <Button size="sm" variant="tinted" icon="plus" onClick={() => openChoices('class')}>{t('Add class')}</Button>
+      </div>
+      <div className="small dim" style={{ marginTop: 4 }}>{iso < todayISO() ? t('Log a past workout') : t('Only for this day')}</div>
+    </div>
+    {weeklyBookings.length > 0 && <div style={{ marginBottom: 14 }}>
+      <div className="small dim" style={{ marginBottom: 8 }}>{t('Repeats every {0}', t(DAYN[weekday]))}</div>
+      <div className="list">{weeklyBookings.map(r => <div className="item" key={r.id} {...(!isExerciseRepeat(r) ? tappable(() => openRoutine(r.id)) : {})}>
+        <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name={isExerciseRepeat(r) ? 'dumbbell' : glyphOf(r.emoji)} /></span>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{isExerciseRepeat(r) ? t('Exercise') : r.kind === 'visit' ? t('Class') : t('Routine')}</div></div>
+        <Button size="sm" variant="ghost" icon="trash" aria-label={t('Remove {0} from this day', r.name)} onClick={event => { event.stopPropagation(); removeWeeklyBooking(r.id) }}>{t('Remove for this day')}</Button>
+      </div>)}</div>
+    </div>}
+    {skipped.length > 0 && <div style={{ marginBottom: 14 }}>
+      <div className="small dim" style={{ marginBottom: 8 }}>{t('Skipped for this day')}</div>
+      <div className="list">{skipped.map(id => st.routines.find(r => r.id === id)).filter(Boolean).map(r => <div className="item" key={r.id}>
+        <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="reset" /></span>
+        <div className="grow"><div className="tt">{r.name}</div></div>
+        <Button size="sm" variant="ghost" onClick={() => restoreSkipped(r.id)}>{t('Restore')}</Button>
+      </div>)}</div>
+    </div>}
+    {bookedRoutine && <div style={{ marginBottom: 14 }}>
+      <div className="small dim" style={{ marginBottom: 8 }}>{t('Booked for this day')}</div>
+      <div className="list">
+        <div className="item" {...tappable(() => openRoutine(bookedRoutine.id, true))}>
+          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name={glyphOf(bookedRoutine.emoji)} /></span>
+          <div className="grow"><div className="tt">{bookedRoutine.name}</div><div className="ss">{t('Routine')}</div></div>
+          <button type="button" className="iconbtn" aria-label={t('Remove from this day')} title={t('Remove from this day')} onClick={event => { event.stopPropagation(); update(s => { s.dayPlan[iso] = 'rest' }) }}><Icon name="trash" /></button>
+        </div>
+      </div>
+    </div>}
     <div className="list">
-      {st.routines.filter(r => !remaining.includes(r.id)).map(row)}
       <div className="item" {...tappable(() => set('rest'))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest / skip this day')}</div></div>{effIds.length === 0 && <Icon name="check" className="accent" />}</div>
       {hasOvr && <div className="item" {...tappable(() => set(''))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="reset" /></span><div className="grow"><div className="tt">{t('Back to weekly plan')}</div></div></div>}
     </div>
@@ -2648,32 +2918,58 @@ function DayNote({ iso, close }) {
 }
 export const dayNoteSheet = iso => ui().openSheet(close => <DayNote iso={iso} close={close} />)
 
-// Plan → Schedule → a weekday. One sheet for the whole day: tap routines to put them on it or
-// take them off (two or more make a combined day, docs/dev/COMBINE_ROUTINES.md), in the order
-// tapped, which is the order the session runs them; "Rest day" clears it. The sheet stays open
-// for a second pick, so "Done" closes it. The weekday never stores [] (the key goes instead).
-function DayAssign({ day, close }) {
+// Plan → Schedule → a weekday. Saved classes and routines live in separate pickers so the
+// weekday sheet stays short. Tapping several choices combines them in the order tapped;
+// "Rest day" clears the weekday. The weekday never stores [] (the key goes instead).
+function DayAssignChoices({ day, kind, close, dayClose }) {
   const st = useStore(s => s.S)
   const cur = [].concat(st.week[day] || [])
+  const choices = st.routines.filter(r => !isExerciseRepeat(r) && (r.kind === 'visit' ? 'class' : 'routine') === kind)
   const toggle = id => update(s => {
     const ids = [].concat(s.week[day] || [])
     const next = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]
     if (next.length) s.week[day] = next; else delete s.week[day]
   })
+  const create = () => {
+    const r = { id: uid(), name: kind === 'class' ? t('New class') : t('New routine'), emoji: kind === 'class' ? 'stretch' : DEFAULT_GLYPH, ...(kind === 'class' ? { kind: 'visit' } : {}), ex: [] }
+    update(s => { s.routines.push(r); s.week[day] = [...[].concat(s.week[day] || []), r.id] })
+    close()
+    closeThenNav(dayClose, '/routines/r/' + r.id)
+  }
+  return <>
+    <h3 style={{ marginBottom: 2 }}>{kind === 'class' ? t('Choose a class') : t('Choose a routine')}</h3>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Scheduled every {0}. Pick more than one to combine them.', t(DAYN[day]))}</div>
+    {choices.length > 0 && <div className="list menu-list">{choices.map(r => {
+      const on = cur.includes(r.id)
+      return <div key={r.id} className="item menu-item" aria-pressed={on} {...tappable(() => toggle(r.id))}>
+        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{kind === 'class' ? t('Class') : exCount(r.ex.length)}</div></div>
+        <span className={'menu-on' + (on ? ' is-on' : '')}><Icon name="check" /></span>
+      </div>
+    })}</div>}
+    <div style={{ marginTop: 12 }}><Button size="sm" variant="tinted" icon="plus" onClick={create}>{kind === 'class' ? t('Create class') : t('Create routine')}</Button></div>
+    <div style={{ height: 12 }} />
+    <Button variant="primary" onClick={close}>{t('Done')}</Button>
+  </>
+}
+function DayAssign({ day, close }) {
+  const st = useStore(s => s.S)
+  const cur = [].concat(st.week[day] || [])
+  const openChoices = kind => ui().openSheet(choiceClose => <DayAssignChoices day={day} kind={kind} close={choiceClose} dayClose={close} />)
   const rest = () => { update(s => { delete s.week[day] }); close() }
   return <>
     <h3 style={{ marginBottom: 2 }}>{t(DAYN[day])}</h3>
-    <div className="muted small" style={{ marginBottom: 10 }}>{t('Pick one routine, or more to train them together.')}</div>
+    <div className="muted small" style={{ marginBottom: 10 }}>{t('Pick a routine or class, or combine more than one.')}</div>
+    <div style={{ marginBottom: 14 }}>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <Button size="sm" variant="tinted" icon="plus" onClick={() => addWeekdayExercise(day, close)}>{t('Add exercise')}</Button>
+        <Button size="sm" variant="tinted" icon="plus" onClick={() => openChoices('class')}>{t('New class')}</Button>
+        <Button size="sm" variant="tinted" icon="plus" onClick={() => openChoices('routine')}>{t('New routine')}</Button>
+      </div>
+      <div className="small dim" style={{ marginTop: 4 }}>{t('The same routines on the same weekdays, every week.')}</div>
+    </div>
     <div className="list menu-list">
       <div className="item menu-item" {...tappable(rest)}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest day')}</div></div><span className={'menu-on' + (!cur.length ? ' is-on' : '')}><Icon name="check" /></span></div>
-      {st.routines.map(r => {
-        const on = cur.includes(r.id)
-        return <div key={r.id} className="item menu-item" aria-pressed={on} {...tappable(() => toggle(r.id))}>
-          <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-          <div className="grow"><div className="tt">{r.name}</div><div className="ss">{r.kind === 'visit' ? t('Visit') : exCount(r.ex.length)}</div></div>
-          <span className={'menu-on' + (on ? ' is-on' : '')}><Icon name="check" /></span>
-        </div>
-      })}
     </div>
     <div style={{ height: 12 }} />
     <Button variant="primary" onClick={close}>{t('Done')}</Button>
@@ -2907,7 +3203,7 @@ function WorkoutDetail({ w, close }) {
         try { update(s => { id = saveSessionAsRoutine(s, w, w.name) }) }
         catch (e) { toast(t(e.message)); return }
         close()
-        nav('/plan/r/' + id)
+        nav('/routines/r/' + id)
       }
     })}>{t('Save as routine')}</Button>
     <div style={{ height: 8 }} />
@@ -3181,13 +3477,13 @@ function LogPastWorkout({ initial, close }) {
   const options = [
     { value: '', label: t('Freestyle') },
     ...(planned.length > 1 ? [{ value: PLANNED_DAY, label: deriveSessionName(planned.map(r => r.name)) }] : []),
-    ...st.routines.map(r => ({ value: r.id, label: r.name })),
+    ...st.routines.filter(r => !isExerciseRepeat(r) || planned.some(p => p.id === r.id)).map(r => ({ value: r.id, label: r.name })),
   ]
 
   const go = replaceId => {
     close()
     const routineIds = routineId === PLANNED_DAY ? planned.map(r => r.id) : routineId ? [routineId] : []
-    beginBackfill({ iso: date, time, durationMin: Math.max(1, dur), routineIds, replaceId })
+    beginBackfill({ iso: date, time, durationMin: Math.max(1, dur), routineIds, replaceId, exercise: initial?.exercise })
   }
   const submit = () => {
     if (!date || date > today) { toast(t('Pick a day up to today')); return }
@@ -3247,7 +3543,7 @@ export function logPastWorkoutSheet(initial) {
 // top-level routineId. One routine from the picker, or every routine of a missed combined day.
 // Only from the history before that day (historyAsOf): a session logged later must not hand its
 // progression back to the day it skipped.
-function beginBackfill({ iso, time, durationMin, routineIds, replaceId }) {
+function beginBackfill({ iso, time, durationMin, routineIds, replaceId, exercise }) {
   const st = S()
   const start = backfillStart(iso, time)
   const past = historyAsOf(st, { d: iso, start, replaceId })
@@ -3262,6 +3558,10 @@ function beginBackfill({ iso, time, durationMin, routineIds, replaceId }) {
       backfill: { durationMin, replaceId: replaceId || null },
       // Same layout snapshot as a live session (see beginWorkout).
       workoutView: st.workoutView || 'cards',
+    }
+    if (exercise) {
+      const seed = exercise.quick ? freestyleConfig(sessionHistory(s), { id: exercise.id, ...exercise.cfg }) : exercise.cfg
+      s.active.entries.push({ id: exercise.id, ...buildSessionEntry(s, exercise.id, seed, null, null) })
     }
   })
   useUI.getState().stopRest()
@@ -3296,7 +3596,7 @@ function AddRoutineToSession({ close }) {
   return <>
     <h3>{t('Add routine')}</h3>
     <div className="list">
-      {st.routines.map(r => {
+      {st.routines.filter(r => !isExerciseRepeat(r)).map(r => {
         const already = inSession.has(r.id)
         const empty = !(r.ex || []).length
         const disabled = already || empty

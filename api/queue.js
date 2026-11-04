@@ -1,6 +1,6 @@
-// Floating coach week — the "what's next" rule for web-push reminders. Hand-copied (not
-// imported) from frontend/src/lib/queue.js / lib/history.js: the same rules on both sides, kept
-// as a tiny standalone module here (rather than inline in server.js) so it can be unit-tested
+// Floating coach week — the "what's next" rule for web-push reminders. The queue's normalization,
+// completion, and pin rules come from shared/queue-core.js, which the frontend also imports.
+// This module keeps the reminder's time-zone and weekday adapters separate and can be unit-tested
 // without booting the whole server. `S.queue` is written by a planner — any API client that PUTs
 // state with a queue (a coaching agent, a script) — or by the frontend's own rotation feature
 // (marked by `rotationId`; see frontend/src/lib/rotation.js). Three rules live here:
@@ -26,39 +26,7 @@
 // skips it. A pin on a past day is stale (the session floats again), and a pin on a done session
 // is fulfilled (`pinState === 'done'`) and reads as no override at all. Pins change which session
 // is NEXT, never what counts as DONE, so the tally a planner reads is untouched.
-function routineIdsOf(w) {
-  return Array.isArray(w.routineIds) ? w.routineIds : (w.routineId ? [w.routineId] : []);
-}
-function nameParts(w) {
-  return String(w.name || '').split(' + ');
-}
-// The reminder tick runs everything below every ten seconds for each profile with a reminder on,
-// over whatever its state file holds: a queue, routines and workouts of any length a 5 MB PUT
-// allows. So each function reads each list once and looks things up in Sets, never walking one
-// list inside a walk of another. The nested walks (indexOf inside filter, the workouts once per
-// session, the routines once per weekday entry) held the event loop for minutes on a crafted
-// file, and every other user's requests and reminders waited behind it.
-//
-// The sessions of `q` that count as done under the DONE RULE, in one pass over the workouts. A
-// session's name is that of the first routine with its id, as the rule reads it. The pass stops
-// once every session is done.
-function doneIds(S, q) {
-  const want = new Set(q.ids), names = new Map(), done = new Set();
-  for (const r of S.routines || []) if (want.has(r?.id) && !names.has(r.id)) names.set(r.id, r.name);
-  for (const w of S.workouts || []) {
-    if (done.size === want.size) break;
-    const ids = routineIdsOf(w);
-    const byClock = (w.start ?? 0) >= S.queue.since;
-    const byName = S.queue.strict !== true && String(w.d || '') >= q.startsOn;
-    if (!byClock && !byName) continue;
-    let parts;
-    for (const id of ids) {
-      if (!want.has(id) || done.has(id)) continue;
-      if (byClock || (parts ??= nameParts(w)).includes(names.get(id))) done.add(id);
-    }
-  }
-  return done;
-}
+import { readQueue, completedIds, nextOn, pinStateFor } from './shared/queue-core.js';
 // The calendar date of an instant where the USER is. The frontend's fallback for a missing
 // startsOn is the device's local date of the apply; the closest thing here is the zone the
 // reminder already fires by (S.reminder.tz), so the two copies name the same day. UTC when the
@@ -74,16 +42,7 @@ function dayIn(ms, tz) {
 // startsOn means active since the day of the apply (dayIn above); a session whose routine was
 // deleted is dropped from the week (the frontend's queue.js does the same — it could never be
 // started or logged).
-function queueOf(S) {
-  const q = S.queue;
-  if (!q || typeof q !== 'object' || !Array.isArray(q.ids)) return null;
-  const startsOn = typeof q.startsOn === 'string' ? q.startsOn : dayIn(q.since || 0, S.reminder?.tz);
-  // First valid occurrence of each id — the same normalization as the frontend's queueOf.
-  const known = new Set((S.routines || []).map(r => r?.id));
-  const ids = [...new Set(q.ids)].filter(id => known.has(id));
-  if (!ids.length) return null;
-  return { ids, startsOn };
-}
+const queueOf = S => readQueue(S, ms => dayIn(ms, S.reminder?.tz));
 // The reminder tick only ever asks "what's next right now" — there is no separate "today" to
 // preview a different date against, so `today` in the spec's `next(iso, today)` is just `iso`.
 // That collapses `iso === max(today, startsOn)` to the equivalent, simpler `iso >= startsOn`, and
@@ -91,14 +50,9 @@ function queueOf(S) {
 function queueNext(S, iso) {
   const q = queueOf(S);
   if (!q || iso < q.startsOn) return null;
-  const done = doneIds(S, q);
+  const done = completedIds(S, q);
   const remaining = q.ids.filter(id => !done.has(id));
-  const open = new Set(remaining);
-  const pins = Object.entries(S.dayPlan || {}).filter(([d, id]) => d >= iso && open.has(id));
-  const here = pins.find(([d]) => d === iso);
-  if (here) return here[1];
-  const pinned = new Set(pins.map(([, id]) => id));
-  return remaining.find(id => !pinned.has(id)) ?? null;
+  return nextOn(S, remaining, iso, iso);
 }
 
 // What a per-date override pointing at `id` means for the queue: 'open' — a pin on a session
@@ -106,9 +60,7 @@ function queueNext(S, iso) {
 // override; null — not a queue session (no queue, a malformed one, a routine override, 'rest', a
 // deleted routine), so the plain override rules apply.
 export function pinState(S, id) {
-  const q = queueOf(S);
-  if (!q || !id || !q.ids.includes(id)) return null;
-  return doneIds(S, q).has(id) ? 'done' : 'open';
+  return pinStateFor(S, queueOf(S), id);
 }
 
 // A weekday can hold a routine-id list (combine routines); the reminder only needs the first.
@@ -119,13 +71,14 @@ export function pinState(S, id) {
 // next session wins over the plain weekday assignment, falling back to the weekday only once the
 // queue is finished, not yet started, or absent.
 export function effectiveRoutineId(S, iso) {
+  const skipped = new Set(Array.isArray(S.dayPlanSkip?.[iso]) ? S.dayPlanSkip[iso] : []);
   const ov = S.dayPlan?.[iso];
   if (ov === 'rest') return null;
   const pin = pinState(S, ov);
-  if (pin === 'open') return ov;
-  if (!pin && ov && S.routines?.some(r => r?.id === ov)) return ov;
+  if (pin === 'open' && !skipped.has(ov)) return ov;
+  if (!pin && ov && S.routines?.some(r => r?.id === ov)) return skipped.has(ov) ? null : ov;
   const q = queueNext(S, iso);
-  if (q) return q;
+  if (q && !skipped.has(q)) return q;
   const wd = new Date(iso + 'T12:00:00').getDay();
   // The planner's weekday pointers stay hidden on a live queue day even when it has no session for
   // it (every remaining one pinned to another day): those sessions have their days.
@@ -134,7 +87,7 @@ export function effectiveRoutineId(S, iso) {
   if (!list.length) return null;
   const known = new Set((S.routines || []).map(r => r?.id));
   const queued = live ? new Set(S.queue.ids) : null;
-  return list.find(id => known.has(id) && !(live && queued.has(id))) || null;
+  return list.find(id => known.has(id) && !skipped.has(id) && !(live && queued.has(id))) || null;
 }
 
 // Is `iso` a day the queue speaks for, with sessions still to do? (`today === iso` here, so
@@ -142,6 +95,6 @@ export function effectiveRoutineId(S, iso) {
 export function queueLiveOn(S, iso) {
   const q = queueOf(S);
   if (!q || iso < q.startsOn) return false;
-  const done = doneIds(S, q);
+  const done = completedIds(S, q);
   return q.ids.some(id => !done.has(id));
 }

@@ -30,7 +30,7 @@
 // is NEXT, never what counts as DONE, so weekTally, the reminders' tally and whatever a planner
 // reads back are untouched.
 //
-// DONE RULE — kept word for word with the api's reminder copy (api/queue.js), and the rule a
+// DONE RULE — implemented once in api/shared/queue-core.js for the app and API, and the rule a
 // planner has to mirror, so nobody disagrees about which session is next: a session is done
 // when any FINISHED workout on that routine exists after the week was applied. Missed sets are
 // the planner's business. `S.active` is not in `S.workouts`, so a session in progress never
@@ -41,9 +41,8 @@
 // workout from a past week that happens to carry this week's name must never count.
 
 import { isoOf, weekKey, weekStartOf } from './format.js'
-
-const routineIdsOf = w => (Array.isArray(w.routineIds) ? w.routineIds : (w.routineId ? [w.routineId] : []))
-const nameParts = w => String(w.name || '').split(' + ')
+import { isExerciseRepeat } from './exercise-repeat.js'
+import { readQueue, completedIds, workoutCountsFor, activePins, nextOn, pinStateFor, routineIdsOf } from '../../../api/shared/queue-core.js'
 
 // Tolerant reader: whole-state sync is last-writer-wins, so a half-written or older-shaped
 // queue can arrive from another client. A bad shape reads as "no queue" rather than taking
@@ -52,34 +51,22 @@ const nameParts = w => String(w.name || '').split(' + ')
 // is dropped from the week: it could never be started or logged,
 // and keeping it would pin the whole week on it; a queue left with no session at all reads as
 // no queue. A missing startsOn means active since the day of the apply.
-export const queueOf = S => {
-  const q = S?.queue
-  if (!q || typeof q !== 'object' || !Array.isArray(q.ids)) return null
-  const routines = Array.isArray(S.routines) ? S.routines : []
-  // First valid occurrence of each id: a queue is a set of sessions, and a repeated id would
-  // otherwise show twice in the progress row and count twice in the week's tally. The persisted
-  // payload is never rewritten — normalizing is a read, not a migration.
-  const ids = q.ids.filter((id, i) => q.ids.indexOf(id) === i && routines.some(r => r.id === id))
-  if (!ids.length) return null
-  return { ...q, ids, startsOn: typeof q.startsOn === 'string' ? q.startsOn : isoOf(new Date(q.since || 0)) }
-}
-
-// The DONE RULE for one workout and one session — `isDone` asks it across the log.
-const countsFor = (S, q, w, id) => routineIdsOf(w).includes(id)
-  && ((w.start ?? 0) >= q.since
-    || (q.strict !== true && String(w.d || '') >= q.startsOn && nameParts(w).includes(S.routines.find(r => r.id === id)?.name)))
-const isDone = (S, q, id) => S.workouts.some(w => countsFor(S, q, w, id))
+export const queueOf = S => readQueue(S, ms => isoOf(new Date(ms)))
 
 /** The week's sessions already done, in slot order. `[]` without a queue. */
 export function queueDone(S) {
   const q = queueOf(S)
-  return q ? q.ids.filter(id => isDone(S, q, id)) : []
+  if (!q) return []
+  const done = completedIds(S, q)
+  return q.ids.filter(id => done.has(id))
 }
 
 /** The sessions still to do, in slot order — the first is the next one. `[]` without a queue. */
 export function queueRemaining(S) {
   const q = queueOf(S)
-  return q ? q.ids.filter(id => !isDone(S, q, id)) : []
+  if (!q) return []
+  const done = completedIds(S, q)
+  return q.ids.filter(id => !done.has(id))
 }
 
 /**
@@ -98,19 +85,6 @@ export function queueNext(S, iso, today) {
   return nextOn(S, queueRemaining(S), on, today)
 }
 
-/** Active pins, `[{ iso, id }]`: dayPlan entries naming a session still to do, dated today or later. */
-const activePins = (S, remaining, today) => Object.entries(S.dayPlan || {})
-  .filter(([iso, id]) => iso >= today && remaining.includes(id))
-  .map(([iso, id]) => ({ iso, id }))
-
-/** The queue's session for the date `on`: the one pinned there, else the first undone one not pinned to another day. */
-const nextOn = (S, remaining, on, today) => {
-  const pins = activePins(S, remaining, today)
-  const here = pins.find(p => p.iso === on)
-  if (here) return here.id
-  return remaining.find(id => !pins.some(p => p.id === id)) ?? null
-}
-
 /**
  * Is `iso` the day the queue speaks for, with sessions still to do? True even when queueNext is
  * null there because every remaining session is pinned to another day: the planner's weekday
@@ -127,9 +101,7 @@ export function queueLiveOn(S, iso, today) {
  * override; null — not a queue session (or no queue), the plain override rules apply.
  */
 export function pinState(S, id) {
-  const q = queueOf(S)
-  if (!q || !id || !q.ids.includes(id)) return null
-  return isDone(S, q, id) ? 'done' : 'open'
+  return pinStateFor(S, queueOf(S), id)
 }
 
 /**
@@ -189,16 +161,18 @@ export function weekTally(S, today) {
   // the queue" is tested against the raw ids: a queue routine deleted mid-week is gone from
   // `q.ids`, but a weekday pointer to it is still not a day you planned yourself.
   const unqueued = id => !(q && S.queue.ids.includes(id))
-  const ownIds = ids => [].concat(ids || []).filter(id => S.routines.some(r => r.id === id) && unqueued(id))
+  const ownIds = ids => [].concat(ids || []).filter(id => S.routines.some(r => r.id === id && !isExerciseRepeat(r)) && unqueued(id))
+  const repeatIds = ids => [...new Set([].concat(ids || []).filter(id => S.routines.some(r => r.id === id && isExerciseRepeat(r)) && unqueued(id)))]
   const ownDays = Object.values(S.week || {}).filter(ids => ownIds(ids).length).length
-  if (!q) return { done: thisWeek.length, planned: ownDays }
+  const repeatSlots = Object.values(S.week || {}).reduce((n, ids) => n + repeatIds(ids).length, 0)
+  if (!q) return { done: thisWeek.length, planned: ownDays + repeatSlots }
   // The workout that earns each session its credit is the earliest one the DONE RULE accepts
   // (by date, not array position — a backfilled log is not always in order); every other
   // workout this week is training on top, and so is a crediting workout's own half.
   const chrono = (a, b) => ((a.d || '') < (b.d || '') ? -1 : (a.d || '') > (b.d || '') ? 1 : (a.start || 0) - (b.start || 0))
-  const credited = new Set(q.ids.map(id => S.workouts.filter(w => countsFor(S, q, w, id)).sort(chrono)[0]).filter(Boolean))
+  const credited = new Set(q.ids.map(id => S.workouts.filter(w => workoutCountsFor(S, q, w, id)).sort(chrono)[0]).filter(Boolean))
   // (a logged workout keeps its credit even if its routine was deleted since — existence only
   // decides what is PLANNED)
   const other = thisWeek.filter(w => !credited.has(w) || routineIdsOf(w).some(unqueued)).length
-  return { done: queueDone(S).length + other, planned: q.ids.length + ownDays }
+  return { done: queueDone(S).length + other, planned: q.ids.length + ownDays + repeatSlots }
 }

@@ -12,7 +12,7 @@ docker compose up -d --build
 curl http://localhost:8080/api/health
 ```
 
-Open <http://localhost:8080>. Docker Compose builds from this source because the fork's registry images have not been published. `docker compose logs -f` shows logs; `docker compose down` stops the containers without deleting `./data`.
+Open <http://localhost:8080>. Docker Compose builds from this source because the fork's registry images have not been published. The web port binds to `127.0.0.1` by default. `docker compose logs -f` shows logs; `docker compose down` stops the containers without deleting `./data`.
 
 ## Phone access and passkeys
 
@@ -34,7 +34,9 @@ gym.example.com {
 }
 ```
 
-For a private network certificate, see [HTTPS on a private network](SELF_HOSTING_HTTPS.md). Kubernetes users can follow the [manifest guide](SELF_HOSTING_KUBERNETES.md) or [Helm guide](../helm/README.md).
+When the reverse proxy runs on another host, set `WEB_PORT` to the private address it can reach (for example `192.168.1.10:8080`) and restrict that port with the host firewall. Do not expose plain HTTP publicly alongside the HTTPS proxy.
+
+For a private network certificate, see [HTTPS on a private network](SELF_HOSTING_HTTPS.md).
 
 ## Single-user security
 
@@ -42,6 +44,6 @@ Create your profile before sharing the address. To restrict new registrations af
 
 ## Backups and updates
 
-Back up the entire `./data` directory, including the database, uploaded media, and session secret. Stop the stack or take a consistent filesystem snapshot before copying it. Restore the directory with the same permissions before restarting.
+Back up the entire `./data` directory, including the database, uploaded media, and session secret. Stop the stack or take a consistent filesystem snapshot before copying it. The default API now runs as UID 10001. A short-lived Compose helper changes ownership of `./data` to UID 10001 before the API starts, including on the first upgrade and after a restore. This changes host file ownership; use an account with access to that UID or `sudo` for host-side backups. The helper must finish successfully before the API starts. A standalone `docker run` deployment must grant UID 10001 ownership of its data mount before starting the image.
 
-To update this fork, pull the desired commit, then run `docker compose up -d --build`. Check `curl http://localhost:8080/api/health` and sign in from your phone. GitHub Actions and its registry images are currently disabled for this fork.
+To update from source, pull the desired commit, then run `docker compose up -d --build`. Enable GitHub Actions and make `tests-ok` a required check for `main` in the repository ruleset. A successful test run on `main` publishes both `:edge` images and matching `:sha-<full-commit>` images to GitHub Container Registry. Both Compose services use `IMAGE_TAG` from `.env` (default `edge`); set it to one `sha-<full-commit>` value to pull a tested pair or roll back. Run `docker compose pull && docker compose up -d --no-build`, then check `curl http://localhost:8080/api/health` and sign in from your phone. The registry makes new images available; it does not update the running server automatically. Private packages require the server to log in to `ghcr.io` before pulling.
