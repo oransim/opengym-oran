@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux images. A Windows checkout must not turn them into CRLF,
+# or nginx's entrypoint fails on /docker-entrypoint.d/*.sh with "no such file or directory".
+*.sh text eol=lf
+Dockerfile text eol=lf

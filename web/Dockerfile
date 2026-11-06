@@ -74,7 +74,16 @@ COPY web/nginx.conf.template /etc/nginx/templates/default.conf.template
 # Stops the container at start-up on a BASE_PATH the config cannot serve ("/gym/", "gym"), instead
 # of a server that 404s under the prefix. nginx's entrypoint runs these scripts in order; 05 is
 # before the template rendering at 20.
-COPY --chmod=755 web/05-check-base-path.sh /docker-entrypoint.d/
+#
+# A Windows checkout saves the script with CRLF. The entrypoint executes it directly, the shebang
+# becomes /bin/sh\r, and the container exits with "no such file or directory" before nginx
+# listens. Strip the CR inside the image and mark the script executable: a non-executable file
+# is skipped with a log line and nginx would start anyway. 101 has to stay the last USER.
+USER root
+COPY web/05-check-base-path.sh /docker-entrypoint.d/05-check-base-path.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.d/05-check-base-path.sh \
+ && chmod 755 /docker-entrypoint.d/05-check-base-path.sh
+USER 101
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 # The exercise stills and animations, 180 px, licensed from Gym visual for openGym only: see
 # catalogue/media/NOTICE.md. They ship inside the image; nothing is downloaded at start-up.

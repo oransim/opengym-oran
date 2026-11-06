@@ -267,8 +267,11 @@ describe('the web container refuses a BASE_PATH it cannot serve', () => {
   it('is installed where the entrypoint runs it, and executable', () => {
     // Not executable, the entrypoint skips it with a log line and nginx starts anyway. Its 05
     // sorts before 20-envsubst-on-templates.sh, nginx's own step that renders the template.
+    // The CR strip is what lets a Windows checkout build: CRLF turns the shebang into /bin/sh\r.
     const dockerfile = readFileSync(join(WEB, 'Dockerfile'), 'utf8')
-    expect(dockerfile).toMatch(/^COPY --chmod=755 web\/05-check-base-path\.sh \/docker-entrypoint\.d\/$/m)
+    expect(dockerfile).toMatch(/^COPY web\/05-check-base-path\.sh \/docker-entrypoint\.d\/05-check-base-path\.sh$/m)
+    expect(dockerfile).toMatch(/sed -i 's\/\\r\$\/\/' \/docker-entrypoint\.d\/05-check-base-path\.sh/)
+    expect(dockerfile).toMatch(/chmod 755 \/docker-entrypoint\.d\/05-check-base-path\.sh/)
   })
 
   it('runs nginx as uid 101 and still listens on port 80', () => {
