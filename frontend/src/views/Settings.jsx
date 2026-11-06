@@ -978,7 +978,6 @@ export default function Settings({ page = null, find = null, via = null, entryKe
           <AccountIdRow id={user.id} />
         </> : config?.simple_login ? <>
           <Row icon="key" title={t('Sign in')} accessory="chevron" onClick={() => openSimpleSignIn()} />
-          <Row icon="plusCircle" title={t('Create account')} accessory="chevron" onClick={() => openSimpleSignIn('register')} />
           <KeptChangesRows />
         </> : webauthnOK() ? <>
           <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />

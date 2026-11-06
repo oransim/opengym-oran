@@ -24,7 +24,7 @@ curl http://localhost:8080/api/health
 
 Open <http://localhost:8080> and create your profile. `docker compose up --build` builds both containers from this repository. After GitHub Actions is enabled and the tests pass on `main`, the workflow publishes `ghcr.io/oransim/opengym-oran-api:edge` and `ghcr.io/oransim/opengym-oran-web:edge`.
 
-With `SIMPLE_LOGIN=1`, the web app uses username and password, with email links for forgotten passwords. New passwords need at least 15 characters; existing shorter passwords still work until changed. Browser sessions last 90 days by default. Configure a separate SMTP sender and complete the existing-account migration before enabling the new login on a passkey-only account. See [account setup and email recovery](docs/SELF_HOSTING.md#usernamepassword-login-and-email-recovery).
+With `SIMPLE_LOGIN=1`, the web app uses username and password, with email links for forgotten passwords. New passwords need at least 6 characters. Browser sessions last 90 days by default. Configure a separate SMTP sender and complete the existing-account migration before enabling the new login on a passkey-only account. See [account setup and email recovery](docs/SELF_HOSTING.md#usernamepassword-login-and-email-recovery).
 
 ## Use it from your phone
 

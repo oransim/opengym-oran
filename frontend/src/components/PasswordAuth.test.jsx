@@ -95,7 +95,7 @@ describe('passwordError', () => {
     expect(passwordError(fail(401, { code: 'bad-credentials' }))).toBe('Wrong name, e-mail or password.')
     expect(passwordError(fail(400, { code: 'email-invalid' }))).toBe('That is not an e-mail address.')
     expect(passwordError(fail(409, { code: 'email-taken' }))).toBe('Another profile already uses this e-mail address.')
-    expect(passwordError(fail(400, { code: 'too-short' }))).toBe('Use at least 15 characters.')
+    expect(passwordError(fail(400, { code: 'too-short' }))).toBe('Use at least 6 characters.')
     expect(passwordError(fail(400, { code: 'too-common' }))).toBe('That password is too easy to guess. Try a longer one, or a few random words strung together.')
     expect(passwordError(fail(409, { code: 'last-way-in' }))).toMatch(/only way into your profile/)
     expect(passwordError(fail(429, { code: 'locked', retryAfter: 120 }))).toBe('Too many attempts. Try again in 2 minutes.')
@@ -145,11 +145,11 @@ describe('PasswordSignInSheet', () => {
     type(byPlaceholder(host, 'Reset code'), 'k7wq-2mzp-4hxa')
     type(byPlaceholder(host, 'New password'), 'short')
     await submit(host)
-    expect(alertText(host)).toBe('Use at least 15 characters.')
+    expect(alertText(host)).toBe('Use at least 6 characters.')
     expect(mocks.passwordResetRedeem).not.toHaveBeenCalled()
     type(byPlaceholder(host, 'New password'), 'e\u0301aaaa') // 6 raw code points, 5 after NFKC like the API
     await submit(host)
-    expect(alertText(host)).toBe('Use at least 15 characters.')
+    expect(alertText(host)).toBe('Use at least 6 characters.')
     expect(mocks.passwordResetRedeem).not.toHaveBeenCalled()
     // A typo would only show at the next sign-in, and cost another code from the admin.
     const again = byPlaceholder(host, 'Repeat the password')

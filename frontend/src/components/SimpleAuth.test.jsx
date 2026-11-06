@@ -31,6 +31,8 @@ beforeEach(() => { m.calls = []; m.sheets = []; m.user = null; m.fail = null; wi
 afterEach(() => act(() => { root.unmount(); host.remove() }))
 it('offers only simple sign-in and signs into the named profile', async () => {
   mount(); expect(host.querySelector('[autocomplete="username"]')).toBeTruthy(); expect(host.querySelector('[autocomplete="current-password"]')).toBeTruthy()
+  expect(button('Forgot password?')).toBeTruthy()
+  expect(button('Create account')).toBeUndefined()
   expect(host.textContent).not.toMatch(/passkey|QR|other device|reset code/i)
   type('username', 'oran'); type('password', 'my sufficiently long password'); await submit()
   expect(m.user).toEqual({ id: 'u1', name: 'oran' }); expect(m.calls[0].body.name).toBe('oran')
@@ -46,14 +48,14 @@ it('shows mail delivery errors instead of a success message', async () => {
   expect(host.querySelector('[role="alert"]').textContent).toContain('unavailable'); expect(host.textContent).not.toContain('If an account uses that email')
 })
 it('requires a valid recovery email when creating an account', async () => {
-  mount(); act(() => button('Create account').click()); type('username', 'oran'); type('password', 'my sufficiently long password'); type('confirm-password', 'my sufficiently long password'); await submit()
+  mount({ initialMode: 'register' }); type('username', 'oran'); type('password', 'my sufficiently long password'); type('confirm-password', 'my sufficiently long password'); await submit()
   expect(m.calls.length).toBe(0); expect(host.querySelector('[role="alert"]').textContent).toContain('email')
   type('email', 'recovery@example.com'); await submit(); expect(m.calls[0].body.email).toBe('recovery@example.com')
 })
 it('resets from an email link, removes the token from the URL, and asks for ordinary sign-in', async () => {
   window.location.hash = '#/reset-password?token=' + 'x'.repeat(43)
-  mount({ resetPage: true, resetToken: 'x'.repeat(43) }); type('password', 'my sufficiently long password'); type('confirm-password', 'my sufficiently long password'); await submit()
-  expect(m.calls[0]).toEqual({ path: '/api/login/reset-password', body: { token: 'x'.repeat(43), password: 'my sufficiently long password' } })
+  mount({ resetPage: true, resetToken: 'x'.repeat(43) }); type('password', 'abc123'); type('confirm-password', 'abc123'); await submit()
+  expect(m.calls[0]).toEqual({ path: '/api/login/reset-password', body: { token: 'x'.repeat(43), password: 'abc123' } })
   expect(m.user).toBeNull(); expect(window.location.hash).not.toContain('token='); expect(host.textContent).toContain('Password updated'); expect(host.querySelector('[autocomplete="current-password"]')).toBeTruthy()
 })
 it('rejects mismatched passwords before sending a reset', async () => {

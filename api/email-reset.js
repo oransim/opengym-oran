@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
-import { hashPassword, normalizeEmail, passwordProblem } from './password.js';
+import { hashPassword, normalizeEmail, passwordProblem, MIN_LENGTH } from './password.js';
 import { createWindow } from './rate-limit.js';
 
 const TTL = 30 * 60000;
@@ -83,7 +83,7 @@ export function createEmailReset({ env = process.env, users, save, setPassword, 
       if (!canSetPassword(user)) throw nameConflict();
       const record = user.emailReset;
       const problem = passwordProblem(password);
-      if (problem) throw failure(problem, 400, problem === 'too-short' ? 'Use at least 15 characters.' : 'Choose a stronger password.');
+      if (problem) throw failure(problem, 400, problem === 'too-short' ? `Use at least ${MIN_LENGTH} characters.` : 'Choose a stronger password.');
       const hashed = await hashPassword(password);
       if (find() !== user || user.emailReset !== record) throw invalid();
       if (!canSetPassword(user)) throw nameConflict();

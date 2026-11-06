@@ -84,7 +84,7 @@ export function SimpleLogin({ resetPage = false, resetToken = '', initialMode = 
         <Button type="submit" variant="primary" disabled={busy}>{busy ? t('Please wait…') : t(mode === 'forgot' ? 'Send reset link' : mode === 'reset' ? 'Save new password' : titles[mode])}</Button>
       </form>
       <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
-        {mode === 'signin' && <><Button variant="ghost" onClick={() => change('forgot')}>{t('Forgot password?')}</Button><Button variant="ghost" onClick={() => change('register')}>{t('Create account')}</Button></>}
+        {mode === 'signin' && <Button variant="ghost" onClick={() => change('forgot')}>{t('Forgot password?')}</Button>}
         {mode === 'reset' && <Button variant="ghost" onClick={() => change('forgot')}>{t('Request a new link')}</Button>}
         {mode !== 'signin' && <Button variant="ghost" onClick={() => change('signin')}>{t('Back to sign in')}</Button>}
       </div>
