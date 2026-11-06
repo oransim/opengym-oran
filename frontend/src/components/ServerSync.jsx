@@ -14,6 +14,7 @@ import { DEMO } from '../lib/demo.js'
 import { askAddDeviceData, menuSheet } from '../sheets.jsx'
 import { ConnectSheet, CfAccessSheet } from '../views/MobileOnboarding.jsx'
 import { passwordOn, openPasswordSignIn } from './PasswordAuth.jsx'
+import { openSimpleSignIn } from './SimpleAuth.jsx'
 import { Section, Row, Button } from './ui.jsx'
 
 const ui = () => useUI.getState()
@@ -129,6 +130,7 @@ export function connectServer() {
 // first, with the passkey one tap away on it: which of the two this account has is not
 // something this browser can know.
 export function signInAgain() {
+  if (useStore.getState().config?.simple_login) { openSimpleSignIn(); return }
   if (pwOn()) { openPasswordSignIn(webauthnOK() ? passkeySignIn : undefined); return }
   return passkeySignIn()
 }

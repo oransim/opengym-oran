@@ -720,6 +720,60 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: "invalid or expired code", code: "pair-invalid" }
 
+  /api/login/forgot-password:
+    post:
+      tags: [password]
+      summary: Request an email password-reset link
+      description: |
+        Requires PASSWORD_LOGIN. Sends a 256-bit random, single-use link to the
+        account's recovery email. The hash is persisted only after SMTP accepts
+        delivery. Links expire after 30 minutes. Does not change current access.
+        Unknown addresses receive the same queue acknowledgement without mail.
+        Delivery rejection after queuing does not change that public response;
+        it is reported to the server operator without recipient or token details.
+        Requires same-origin CSRF checks; rate-limited by address and email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: Request accepted; does not reveal account existence }
+        '400': { description: Invalid email address }
+        '403': { description: Cross-origin request refused }
+        '429': { description: Too many requests; Retry-After applies }
+        '503': { description: Email sending is unavailable; no account changes }
+
+  /api/login/reset-password:
+    post:
+      tags: [password]
+      summary: Set a password using a single-use email link
+      description: |
+        Requires PASSWORD_LOGIN and same-origin CSRF checks. Expired, used,
+        superseded or invalidated tokens are rejected. Success ends existing
+        account sessions and returns ok without signing the browser in.
+        Training data and the profile ID are unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, minLength: 43, maxLength: 43 }
+                password: { type: string, minLength: 15, maxLength: 256 }
+      responses:
+        '200': { description: Password changed; use normal username/password sign-in }
+        '400': { description: Invalid link or password policy failure }
+        '403': { description: Cross-origin request refused }
+        '429': { description: Too many attempts }
+        '503': { description: Password hashing temporarily unavailable }
+
   /api/login/password:
     post:
       tags: [password]

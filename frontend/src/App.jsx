@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { hideBoot } from './lib/boot.js'
+import { SimpleLogin } from './components/SimpleAuth.jsx'
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useNavigationType, useParams } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
@@ -293,7 +294,8 @@ function Shell() {
     </div>
   )
 
-  const view = l => (!authed ? <Login /> : needsMobileOnboarding ? <MobileOnboarding /> : permSteps ? <PermissionSteps /> : (
+  const view = l => (l.pathname === '/reset-password' ? <SimpleLogin resetPage resetToken={new URLSearchParams(l.search).get('token') || ''} />
+    : !authed ? <Login /> : needsMobileOnboarding ? <MobileOnboarding /> : permSteps ? <PermissionSteps /> : (
     <Routes location={l}>
       <Route path="/home" element={<Home />} />
       <Route path="/plan" element={<Plan />} />

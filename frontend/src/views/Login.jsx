@@ -12,6 +12,7 @@ import { askAddDeviceData } from '../sheets.jsx'
 import { passwordOn, PasswordRegisterForm, PasswordSignInSheet } from '../components/PasswordAuth.jsx'
 import { openDeviceLinkRedeem } from '../components/Passkeys.jsx'
 import { openLostAccess } from '../components/LostAccess.jsx'
+import { SimpleLogin } from '../components/SimpleAuth.jsx'
 
 function RegisterSheet({ close }) {
   const { setUser, pushState, pullState, loadConfig } = useStore()
@@ -96,6 +97,8 @@ export default function Login() {
       </div>
     </div>
   )
+
+  if (config?.simple_login) return <SimpleLogin />
 
   return (
     <div className="narrow" style={wrap}>

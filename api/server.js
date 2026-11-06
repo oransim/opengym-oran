@@ -37,6 +37,7 @@ import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
+import { createEmailReset } from './email-reset.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -73,6 +74,7 @@ const ALLOW_GUEST = !/^(0|false|no|off)$/i.test(process.env.ALLOW_GUEST || '');
 // every account that opts in, so an instance has to ask for it. While it is off every password
 // route answers 404 and the app shows none of it; hashes already stored stay where they are.
 const PASSWORD_LOGIN = /^(1|true|yes|on)$/i.test(process.env.PASSWORD_LOGIN || '');
+const SIMPLE_LOGIN = PASSWORD_LOGIN && /^(1|true|yes|on)$/i.test(process.env.SIMPLE_LOGIN || '');
 // The language the sign-in screen, and every profile that never picked one, starts in (#303) —
 // for an instance whose people share a language. Only a tag's shape is checked here; the app
 // matches it against the languages it has and ignores one it does not know. Unset, it is left
@@ -752,6 +754,7 @@ const PASSKEY_ROUTES = new Set([
 // device code in the body is the credential, never a Bearer.
 const SIGN_IN_ROUTES = new Set([
   'POST /api/login/password', 'POST /api/register/password', 'POST /api/login/password-reset',
+  'POST /api/login/forgot-password', 'POST /api/login/reset-password',
   'POST /api/device-link/options', 'POST /api/device-link/verify'
 ]);
 // A verify error as the answer's body: a passkey made at an address that is not ORIGIN/RP_ID gets
@@ -1070,11 +1073,15 @@ const ACCOUNT_FAILS = createBackoff({
   // At most one per profile with a password, so this cannot grow without bound.
   keep: k => k.startsWith('acct:') && hasPassword(db.users.find(u => u.id === k.slice(5)))
 });
+const emailReset = createEmailReset({ users: () => db.users, save: saveDb, setPassword,
+  clearFailures: user => ACCOUNT_FAILS.clear(acctKey(user)),
+  canSetPassword: user => !nameTaken(user.name, user.id), canUseEmail: (user, email) => !emailTaken(email, user.id) });
 setInterval(() => { AUTH_BURST.sweep(); ADDR_FAILS.sweep(); ACCOUNT_FAILS.sweep(); }, 60000).unref();
 
 // Route -> the kind of failure it can count. Every route listed here also spends the burst
 // budget; `null` spends only that.
 const THROTTLED = {
+  'POST /api/login/forgot-password': 'email', 'POST /api/login/reset-password': 'password',
   'POST /api/login/password': 'password', 'POST /api/login/password-reset': 'password',
   'POST /api/register/password': 'signup',
   'POST /api/account/password': 'password', 'DELETE /api/account/password': null,
@@ -1241,9 +1248,15 @@ const WRONG = { error: 'wrong name or password', code: 'bad-credentials' };
 function setPassword(user, h) {
   user.pw = { h, set: new Date().toISOString() };
   delete user.pwReset;
+  invalidateEmailReset(user);
   user.sv = sessionVersion(user) + 1;
   for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
   dropDeviceLinks(db, user.id);
+}
+
+function invalidateEmailReset(user) {
+  user.resetVersion = (user.resetVersion || 0) + 1;
+  delete user.emailReset;
 }
 
 // A passkey assertion made just now by the signed-in account itself — how someone who has no
@@ -1361,6 +1374,7 @@ async function removeEmail(req, res, user, body) {
   if (!proof) return;
   if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
   delete user.email;
+  invalidateEmailReset(user);
   saveDb();
   audit(req, 'auth.email.remove', { user, msg: proof });
   json(res, 200, { ok: true, email: null });
@@ -1383,7 +1397,24 @@ function removeAccount(u) {
   saveDb();
 }
 
+async function emailResetReply(res, action) {
+  try { json(res, 200, await action()); }
+  catch (e) {
+    if (!e.status) throw e;
+    json(res, e.status, { error: e.message, code: e.code, ...(e.retryAfter ? { retryAfter: e.retryAfter } : {}) },
+      { 'Cache-Control': 'no-store', ...(e.retryAfter ? { 'Retry-After': String(e.retryAfter) } : {}) });
+  }
+}
+
 const passwordRoutes = {
+  'POST /api/login/forgot-password': async (req, res) => {
+    const body = await readBody(req);
+    await emailResetReply(res, () => emailReset.request(body.email, { background: true }));
+  },
+  'POST /api/login/reset-password': async (req, res) => {
+    const body = await readBody(req);
+    await emailResetReply(res, () => emailReset.redeem(body.token, body.password));
+  },
   'POST /api/login/password': async (req, res) => {
     const body = await readBody(req);
     const target = loginTarget(body);
@@ -1456,6 +1487,7 @@ const passwordRoutes = {
     // an invite-only instance nobody without a valid code learns anything about addresses.
     const hasEmail = typeof body.email === 'string' && body.email.trim() !== '';
     const email = hasEmail ? normalizeEmail(body.email) : null;
+    if (SIMPLE_LOGIN && !email) return json(res, 400, EMAIL_ERRORS.invalid);
     if (hasEmail && !email) return json(res, 400, EMAIL_ERRORS.invalid);
     const emailRefused = () => {
       strikeAddress(req, 'email');
@@ -1591,6 +1623,7 @@ const passwordRoutes = {
     }
     const first = !user.email;
     user.email = email;
+    invalidateEmailReset(user);
     saveDb();
     audit(req, first ? 'auth.email.set' : 'auth.email.change', { user, msg: proof + ' · ' + maskEmail(email) });
     json(res, 200, { ok: true, email });
@@ -2136,6 +2169,7 @@ const routes = {
       invite_only: INVITE_ONLY, allow_guest: ALLOW_GUEST,
       // Only when on, so an instance without passwords answers exactly as it did before (#118).
       ...(PASSWORD_LOGIN ? { password_login: true } : {}),
+      ...(SIMPLE_LOGIN ? { simple_login: true, email_reset: emailReset.configured } : {}),
       // Public: the sign-in screen is the first thing that reads it.
       ...(DEFAULT_LANG ? { default_lang: DEFAULT_LANG } : {}),
       // Public like the two flags above: the caps are not a secret, and the absence of the
@@ -2769,6 +2803,7 @@ const routes = {
     if (!u) return json(res, 404, { error: 'no such user' });
     if (isAdmin(u)) return json(res, 400, { error: 'cannot disable an admin' });
     u.disabled = !!body.disabled;
+    if (u.disabled) invalidateEmailReset(u);
     if (u.disabled) presence.delete(u.id);   // drop them off "training now" at once
     // A device link made before the lock would otherwise still be waiting when it is lifted.
     if (u.disabled) dropDeviceLinks(db, u.id);
@@ -3066,7 +3101,7 @@ server.listen(PORT, () => console.log(`gym-api on :${server.address().port} (rpI
 const CLI_REQ = { headers: {}, socket: {} };
 startAdminSocket({
   handle: async msg => {
-    if (!msg || msg.cmd !== 'recover') return { error: 'unknown command' };
+    if (!msg || !['recover', 'setup-password'].includes(msg.cmd)) return { error: 'unknown command' };
     const id = typeof msg.id === 'string' ? msg.id : null;
     const k = nameKey(typeof msg.name === 'string' ? msg.name : '');
     const found = id ? db.users.filter(u => u.id === id) : k ? db.users.filter(u => nameKey(u.name) === k || u.email === k) : [];
@@ -3075,6 +3110,11 @@ startAdminSocket({
     if (found.length > 1) return { error: 'several profiles have that name: pick one with --id', matches: found.map(row) };
     const u = found[0];
     if (u.disabled) return { error: 'that profile is disabled: enable it in the admin dashboard first' };
+    if (msg.cmd === 'setup-password') {
+      if (!PASSWORD_LOGIN) return { error: 'password login is not enabled' };
+      try { await emailReset.setup(u, msg.email); return { ok: true, name: u.name }; }
+      catch (e) { if (e.status) return { error: e.message }; throw e; }
+    }
     const { code, link } = issueRecovery(CLI_REQ, u, null);
     return { ...row(u), code, expires: link.exp };
   }

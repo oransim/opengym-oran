@@ -234,6 +234,7 @@ export const openPasswordRegister = () => ui().openSheet(close => <PasswordRegis
    dropped: someone who backed out of removing a passkey must not have it removed by a prompt
    they no longer see. */
 export function ProveOwner({ passkey, password, onProof, explain = passwordError, danger = false, submitText }) {
+  const simple = useStore(s => !!s.config?.simple_login)
   const name = useStore(s => s.user?.name) || ''
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
@@ -261,7 +262,7 @@ export function ProveOwner({ passkey, password, onProof, explain = passwordError
       if (live.current) setBusy(false)
     }
   }
-  const withPasskey = !!passkey && webauthnOK()
+  const withPasskey = !!passkey && webauthnOK() && !simple
   const withPassword = ev => {
     ev.preventDefault()
     if (!pw) { setErr(t('Enter your password.')); return }

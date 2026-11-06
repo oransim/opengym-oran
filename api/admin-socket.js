@@ -71,7 +71,11 @@ export function startAdminSocket({ env = process.env, handle, log = console }) {
       const nl = buf.indexOf('\n');
       if (nl < 0) return;
       let out;
-      try { out = await handle(JSON.parse(buf.slice(0, nl))); }
+      try {
+        const msg = JSON.parse(buf.slice(0, nl));
+        if (msg?.cmd === 'setup-password') conn.setTimeout(60000);
+        out = await handle(msg);
+      }
       catch (e) { out = { error: e instanceof SyntaxError ? 'not JSON' : 'server error' }; if (!(e instanceof SyntaxError)) log.error('admin socket:', e); }
       conn.end(JSON.stringify(out) + '\n');
     });
