@@ -7,12 +7,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>openGym: API</title>
-<meta name="description" content="The complete openGym HTTP API, documented as an OpenAPI spec: passkey auth, state sync, push notifications, pairing and admin routes.">
+<meta name="description" content="The complete openGym HTTP API, documented as an OpenAPI spec: password auth, state sync, push notifications, pairing and admin routes.">
 <meta name="theme-color" content="#000000">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="preconnect" href="https://stats.duarte-santos.ch">
 <meta property="og:title" content="openGym API reference">
-<meta property="og:description" content="The complete openGym HTTP API as an OpenAPI spec: passkey auth, state sync, push notifications, pairing and admin routes.">
+<meta property="og:description" content="The complete openGym HTTP API as an OpenAPI spec: password auth, state sync, push notifications, pairing and admin routes.">
 <meta property="og:image" content="https://opengym.ch/img/social.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -99,7 +99,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 .ep[open] > summary .ep-chev { transform: rotate(225deg); }
 .ep-sum { grid-column: 2 / -1; color: var(--fg-3); font-size: 13.5px; line-height: 1.45; }
 .ep-body { border-top: 1px solid var(--hair-soft); padding: 16px 16px 18px; }
-/* WebAuthn type names run to 34 characters. On a phone they are wider than the
+/* Long schema names run to 34 characters. On a phone they are wider than the
    card, so every prose block in here is allowed to break inside a word. */
 .ep-body > p, .ep-body > ul li, .ov p, .ov li, .p-desc, .api-sec .sub, .ep-auth,
 .ep-path code, .sch-name code, .p-name, .p-type { overflow-wrap: break-word; }
@@ -213,10 +213,9 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="side-label">On this page</p>
   <a class="side-link" href="#overview"><b>Overview</b><span>Auth model, sessions, conventions</span></a>
   <a class="side-link" href="#meta"><b>Meta</b><span>Health &amp; public config</span></a>
-  <a class="side-link" href="#auth"><b>Auth</b><span>Passkeys &amp; sessions</span></a>
+  <a class="side-link" href="#auth"><b>Auth</b><span>Accounts &amp; sessions</span></a>
   <a class="side-link" href="#pairing"><b>Pairing</b><span>Connect the mobile app</span></a>
-  <a class="side-link" href="#password"><b>Password</b><span>Optional name &amp; password (PASSWORD_LOGIN)</span></a>
-  <a class="side-link" href="#passkeys"><b>Passkeys</b><span>More passkeys &amp; device links</span></a>
+  <a class="side-link" href="#password"><b>Password</b><span>Sign-in and recovery</span></a>
   <a class="side-link" href="#data"><b>Data</b><span>State sync</span></a>
   <a class="side-link" href="#push"><b>Push</b><span>Notifications &amp; rest timer</span></a>
   <a class="side-link" href="#activity"><b>Activity</b><span>Live presence</span></a>
@@ -232,7 +231,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 
 <main id="main" class="api-main">
   <h1>API</h1>
-  <p class="lead">Every route the openGym backend serves (passkey auth, state sync,
+  <p class="lead">Every route the openGym backend serves (password auth, state sync,
      push, pairing, admin) as one hand-written
      OpenAPI&nbsp;spec. The same file lives
      <a href="https://github.com/DuarteSantos8/openGym/blob/main/api/openapi.yaml" rel="noopener">in the repository</a>
@@ -245,44 +244,19 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.3</span>
-    <span>75 endpoints</span>
+    <span>63 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
   <section class="api-sec" id="overview">
     <h2>Overview</h2>
-    <p class="sub">Passkey (WebAuthn) auth + per-user state storage for Open Gym Oran. One Node file, no framework, JSON-file
+    <p class="sub">Password authentication and per-user state storage for Open Gym Oran. One Node file, no framework, JSON-file
        storage, HMAC-signed session cookies.</p>
     <div class="srv">
   <div class="srv-row"><code>/</code><span>Same origin as the openGym web app (the normal deployment)</span></div>
   <div class="srv-row"><code>https://opengym.example.com</code><span>Your self-hosted instance</span></div>
     </div>
     <div class="ov-grid">
-  <div class="ov">
-    <h3>Authentication</h3>
-<p>Sign-in is by <b>passkey</b> (WebAuthn, via <code>@simplewebauthn/server</code>). A successful <code>register/verify</code> or <code>login/verify</code> sets the session cookie; every authenticated route then works with that cookie. The paired mobile app has no shared cookie jar, so it redeems a short pairing code (<code>/api/pair/redeem</code>) for the <i>same</i> signed token and sends it as <code>Authorization: Bearer &lt;token&gt;</code> instead.</p>
-<p>An instance started with <code>PASSWORD_LOGIN=1</code> also offers <b>name-and-password sign-in</b> (tag <code>password</code>): opt-in per profile, scrypt-hashed, throttled, with an admin-issued one-time reset code instead of e-mail. A profile may also add an e-mail address to sign in with instead of its name (<code>/api/account/email</code>); no mail is ever sent to it. Its routes set exactly the same cookie. With the flag off (the default) every one of them answers 404.</p>
-  </div>
-  <div class="ov">
-    <h3>Throttling</h3>
-<p>The <code>password</code> routes are counted per client address: at most 60 requests a minute across them, and wrong answers (a password, a reset code, an invite code on password signup, an e-mail address already in use) pause the address from the 21st on, for 30 s, doubling up to 15 min. Wrong passwords also pause the <i>account</i> they were tried against from the 6th on, for 1 min doubling up to 1 h (the same pause whether the account was named by its name or its e-mail), and an identifier that names no account is paused the same way, as typed. A password check counts from the moment it starts, so checks sent at once get no more tries than checks sent one by one. A paused caller gets <code>429 {&quot;error&quot;: …, &quot;code&quot;: &quot;locked&quot;, &quot;retryAfter&quot;: &lt;s&gt;}</code> with a <code>Retry-After</code> header. Passkey sign-up and sign-in and the pairing routes are not throttled (their failures reach the audit log at most ten a minute per address). The two routes that redeem a one-time device link (tag <code>passkeys</code>) share the per-address budget, and wrong codes pause the address for link redemption only, from the 21st on, the way wrong reset codes do. Adding or removing a passkey in Settings (<code>POST /api/account/passkeys/options</code>, <code>DELETE /api/account/passkeys</code>) and making a device code (<code>POST /api/account/device-link</code>) spend the per-address budget too, and a current password given there as proof counts like one given at sign-in. The address is the socket's, or with <code>TRUST_PROXY=1</code> the one a trusted proxy put in <code>CF-Connecting-IP</code> / the last <code>X-Forwarded-For</code> entry / <code>X-Real-IP</code>; IPv6 clients are counted by /64. Counters live in memory and reset on restart.</p>
-  </div>
-  <div class="ov">
-    <h3>Sessions</h3>
-<p>The cookie/bearer value is <code>&lt;payload&gt;.&lt;hmac&gt;</code> where the payload is <code>&lt;uid&gt;:&lt;expiry-ms&gt;:&lt;session-version&gt;</code>, signed with a per-instance secret (HMAC-SHA256). Sessions last <code>SESSION_DAYS</code> (default 90). <code>POST /api/logout/all</code> bumps the user's session version, which invalidates every token ever issued for the account.</p>
-  </div>
-  <div class="ov">
-    <h3>CSRF</h3>
-<p>State-changing browser requests must come from the app's own origin. The server checks <code>Sec-Fetch-Site</code> (falling back to <code>Origin</code> vs the configured <code>ORIGIN</code>); a mismatch is refused with <code>403 {&quot;error&quot;:&quot;cross-origin request refused&quot;,&quot;code&quot;:&quot;origin-mismatch&quot;,&quot;expected&quot;:ORIGIN}</code> on any non-GET route, the passkey routes included. Exempt: <code>pair/redeem</code>, which the mobile app calls from its own origin (the code in the body is the credential, and the token comes back in the body, never as a cookie), and any request a Bearer token authenticates by itself: a valid session token, with no session cookie beside it, on any route but the sign-in ones — the four passkey routes, the password and reset-code routes and the two device-link routes, which act on the credential in the body, never on a Bearer. A cross-origin request whose Bearer does not buy the exemption is refused before any handler runs: <code>401 {&quot;error&quot;:&quot;not signed in&quot;}</code> when that Bearer does not verify and is the only credential (a paired app whose token was revoked or expired), the 403 otherwise. The passkey routes were exempt before, on the grounds that the challenge id is a credential; but it is bound to nothing else, so a hostile page could complete the attacker's own passkey sign-in in the victim's browser (login CSRF) and the answer set the victim's session to the attacker's account. The password routes are <b>not</b> exempt for the same reason: a hostile page knows a valid name and password of its own.</p>
-  </div>
-  <div class="ov">
-    <h3>Environment-dependent behavior</h3>
-<ul><li><code>INVITE_ONLY=1</code>: registration requires a valid invite code (minted by an admin).</li><li><code>ALLOW_GUEST=0</code>: hides the client-side &quot;continue without account&quot; mode; the server merely reports the flag via <code>GET /api/config</code> (guest mode never talks to this API at all).</li><li><code>ADMIN_UIDS=&lt;uid&gt;,&lt;uid&gt;</code>: user ids treated as admins (a <code>&quot;admin&quot;: true</code> flag on the user record in <code>db.json</code> works too). Admins get the <code>/api/admin/*</code> routes. One admin is the owner: the record with <code>&quot;owner&quot;: true</code>, else the first <code>ADMIN_UIDS</code> entry with a profile, else the oldest admin. Only the owner appoints and removes admins, deletes an admin, hands the role on and clears the audit log.</li><li><code>FIRST_USER_ADMIN</code> (default off; <code>1</code> turns it on): the first profile registered on an instance with no profiles gets that <code>&quot;admin&quot;: true</code> flag and is the owner. Decided at registration only, never applied to an instance that already has profiles.</li><li><code>AUDIT_LOG</code> (default on), <code>AUDIT_MAX</code> (default 5000 events), <code>AUDIT_DAYS</code> (default 90), <code>AUDIT_IP</code> (<code>off</code> | <code>net</code> | <code>full</code>, default off) shape the audit log served by <code>GET /api/admin/audit</code>.</li><li><code>PASSWORD_LOGIN=1</code>: adds the <code>password</code> routes and <code>password_login: true</code> in <code>GET /api/config</code>. Off by default.</li><li><code>DEFAULT_LANG</code> (e.g. <code>pt-BR</code>; unset by default): <code>default_lang</code> in <code>GET /api/config</code>, the language of the sign-in screen and of every profile that never picked one.</li><li><code>TRUST_PROXY=1</code>: the throttle reads the client address from proxy headers (set by the bundled <code>docker-compose.yml</code>, where only the web container can reach the API).</li><li><code>MEDIA_UPLOADS</code> (default on; <code>0</code> removes the <code>media</code> routes and the <code>media</code> block of <code>GET /api/config</code>), <code>MEDIA_QUOTA_MB</code> (200 per profile, <code>0</code> = no cap), <code>MEDIA_IMAGE_MAX_MB</code> (2), <code>MEDIA_GIF_MAX_MB</code> (8), <code>MEDIA_VIDEO_MAX_MB</code> (40), <code>MEDIA_VIDEO_MAX_SEC</code> (60), <code>MEDIA_GC_GRACE_DAYS</code> (14), <code>MEDIA_UPLOADS_PER_HOUR</code> (600 per profile), <code>MEDIA_MIN_FREE_MB</code> (512, <code>0</code> = no floor): photos and videos of custom exercises (tag <code>media</code>). Every MB here is 2^20 bytes.</li></ul>
-  </div>
-  <div class="ov">
-    <h3>Conventions</h3>
-<ul><li>Every response body is JSON with <code>Cache-Control: no-store</code>. The one exception is <code>GET /api/media/{hash}</code>, which answers with the stored file itself (<code>Cache-Control: private, no-store</code>).</li><li>Errors are always <code>{&quot;error&quot;: &quot;&lt;human-readable message&gt;&quot;}</code>. The <code>password</code>, throttle and <code>media</code> routes add a stable <code>code</code> for the client to word in its own language.</li><li>Unknown method+path pairs return <code>404 {&quot;error&quot;:&quot;not found&quot;}</code>; an unhandled exception returns <code>500 {&quot;error&quot;:&quot;server error&quot;}</code>.</li><li>Every route that reads a request body requires <code>Content-Type: application/json</code> (a <code>charset</code> parameter is fine) and answers any other type with <code>415 {&quot;error&quot;:&quot;content-type must be application/json&quot;}</code> — the types a form can send are the ones that skip the CORS preflight, which is how a cross-site form reached these routes. A request with no body needs no Content-Type. A body that does not parse, or parses to anything but an object (<code>null</code>, a string, an array), is <code>400 {&quot;error&quot;:&quot;invalid json&quot;}</code> on every route that reads one; an empty body counts as <code>{}</code>. A body over 5 MiB is <code>413 {&quot;error&quot;:&quot;body too large&quot;}</code>; the rest of the upload is discarded so the answer reaches the client.</li><li>CORS: the request's <code>Origin</code> is reflected in <code>Access-Control-Allow-Origin</code> <b>without</b> <code>Allow-Credentials</code>, so cross-origin callers can only ever authenticate with a Bearer token, never with the cookie.</li></ul>
-  </div>
     </div>
   </section>
 
@@ -353,7 +327,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 
 <section class="api-sec" id="auth">
   <h2>Auth</h2>
-  <p class="sub">Passkey (WebAuthn) registration and login, sessions</p>
+  <p class="sub">Account registration, sign-in, and sessions</p>
   <div class="eps">
 
 <details class="ep" id="op-getMe">
@@ -377,168 +351,6 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">401</span>
     <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-registerOptions">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/register/options</code><span class="ep-chip public">public</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Start passkey registration (WebAuthn ceremony, step 1)</span>
-  </summary>
-  <div class="ep-body">
-<p>Returns <code>PublicKeyCredentialCreationOptions</code> (from <code>@simplewebauthn/server</code>'s <code>generateRegistrationOptions</code>) plus a challenge id <code>cid</code>. The client passes <code>options</code> to <code>navigator.credentials.create()</code> (or <code>@simplewebauthn/browser</code>'s <code>startRegistration</code>) and sends the result to <code>/api/register/verify</code> together with the <code>cid</code>. Challenges are one-shot and expire after 5 minutes.</p>
-<p>No session required.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">name<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string <span class="p-hint">(&le; 40 chars)</span></span>
-    <span class="p-desc">Display name for the new profile (trimmed, max 40 chars).</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">code</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">Invite code, required (and validated) only when the instance runs with INVITE_ONLY. Compared case-insensitively.</span>
-  </div>
-</div>
-<pre><code>{
-  &quot;name&quot;: &quot;Ada&quot;,
-  &quot;code&quot;: &quot;3F9C21A07B54D688&quot;
-}</code></pre>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Ceremony options.<span class="r-sig">{ cid: string, options: <a href="#schema-WebAuthnRegistrationOptions">WebAuthnRegistrationOptions</a> }</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc"><code>name</code> missing/empty.<span class="r-sig"><code>{&quot;error&quot;:&quot;name required&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">Instance is invite-only and the code is missing, used, or revoked.<span class="r-sig"><code>{&quot;error&quot;:&quot;a valid invite code is required&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-registerVerify">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/register/verify</code><span class="ep-chip public">public</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Finish passkey registration (WebAuthn ceremony, step 2)</span>
-  </summary>
-  <div class="ep-body">
-<p>Verifies the authenticator's attestation response against the stored challenge (<code>verifyRegistrationResponse</code>), creates the user + credential, and signs the caller in (sets the session cookie). On an invite-only instance the invite is re-checked and burned here.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">cid<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc">The challenge id from /api/register/options.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">credential<em class="p-req" title="required">required</em></span>
-    <span class="p-type"><a href="#schema-WebAuthnRegistrationCredential">WebAuthnRegistrationCredential</a></span>
-    <span class="p-desc"></span>
-  </div>
-</div>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Registered and signed in. The session cookie is set.<span class="r-sig">{ user: <a href="#schema-SessionUser">SessionUser</a> } &middot; sets <code>Set-Cookie</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc">Challenge expired/replayed, or the attestation did not verify (wrong origin/RP ID, malformed response…). The message is human-readable.<span class="r-sig"><code>{&quot;error&quot;:&quot;challenge expired, try again&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">Invite-only and the code became invalid since step 1.<span class="r-sig"><code>{&quot;error&quot;:&quot;invite code is no longer valid, ask for a new one&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc">This credential id is already registered.<span class="r-sig"><code>{&quot;error&quot;:&quot;credential already registered&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-loginOptions">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/login/options</code><span class="ep-chip public">public</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Start passkey login (WebAuthn ceremony, step 1)</span>
-  </summary>
-  <div class="ep-body">
-<p>Returns <code>PublicKeyCredentialRequestOptions</code> (<code>generateAuthenticationOptions</code> with an empty <code>allowCredentials</code>; discoverable credentials / resident keys are required at registration, so the browser offers the user their passkeys itself) plus a one-shot challenge id <code>cid</code>. Takes no request body.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
-
-
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Ceremony options.<span class="r-sig">{ cid: string, options: <a href="#schema-WebAuthnAuthenticationOptions">WebAuthnAuthenticationOptions</a> }</span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-loginVerify">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/login/verify</code><span class="ep-chip public">public</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Finish passkey login (WebAuthn ceremony, step 2)</span>
-  </summary>
-  <div class="ep-body">
-<p>Verifies the assertion (<code>verifyAuthenticationResponse</code>), updates the signature counter, and signs the caller in (sets the session cookie).</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">cid<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc">The challenge id from /api/login/options.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">credential<em class="p-req" title="required">required</em></span>
-    <span class="p-type"><a href="#schema-WebAuthnAuthenticationCredential">WebAuthnAuthenticationCredential</a></span>
-    <span class="p-desc"></span>
-  </div>
-</div>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Signed in. The session cookie is set.<span class="r-sig">{ user: <a href="#schema-SessionUser">SessionUser</a> } &middot; sets <code>Set-Cookie</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc">Challenge expired/replayed, or the assertion did not verify.<span class="r-sig"><code>{&quot;error&quot;:&quot;not verified&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">The account has been disabled by an admin.<span class="r-sig"><code>{&quot;error&quot;:&quot;this account has been disabled&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">404</span>
-    <span class="p-desc">The passkey's credential id is unknown to this instance.<span class="r-sig"><code>{&quot;error&quot;:&quot;unknown passkey, create a profile first&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s5">500</span>
-    <span class="p-desc">Credential exists but its user record is missing (corrupt db).<span class="r-sig"><code>{&quot;error&quot;:&quot;user missing&quot;}</code></span></span>
   </div>
     </div>
   </div>
@@ -574,7 +386,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Sign out everywhere</span>
   </summary>
   <div class="ep-body">
-<p>Bumps the account's session version, which invalidates <b>every</b> cookie and Bearer token ever issued for it, on every device, including a copy someone walked off with. Passkeys are untouched; signing back in works immediately. Also clears the caller's own cookie. Unredeemed pairing codes for the account are voided too.</p>
+<p>Bumps the account's session version, which invalidates <b>every</b> cookie and Bearer token ever issued for it, on every device, including a copy someone Also clears the caller's own cookie. Unredeemed pairing codes for the account are voided too.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
 
 
@@ -600,7 +412,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Delete your own account and everything of yours</span>
   </summary>
   <div class="ep-body">
-<p>The signed-in account removes itself for good, with the same clean-up as <code>/api/admin/user/delete</code>: the user record, their passkeys, their push subscriptions, their live presence, their training history file, their uploaded photos and videos (<code>DATA_DIR/uploads/&lt;uid&gt;/</code>) and any Coach credential stored for them. Not reversible. The body carries the account's name, typed back by its owner, and the same proof as setting a password (see OwnerProof): a passkey assertion made for this request, or the current password while <code>PASSWORD_LOGIN</code> is on. A paired phone (Bearer token) cannot hold a passkey for the server, so for a profile with no password that counts the pairing itself is the proof (audited as <code>device</code>; the app asks the phone's own screen lock first); a profile with one sends the current password from the phone too. Cookie sessions always need the proof. The name and the last-admin rule are checked before the proof is asked. The last admin is refused while any other profile remains (the instance would be left with nobody to run it); the only profile on an instance may delete itself. Clears the caller's cookie; every other session and Bearer token of the account stops working with it. Audited as <code>auth.account.delete</code>, with the name and the proof it was made with (<code>passkey</code>, <code>password</code>, <code>device</code>); a refused proof as <code>auth.proof.fail</code> with <code>act: account-delete</code>.</p>
+<p>The signed-in account removes itself for good, with the same clean-up as subscriptions, their live presence, their training history file, their uploaded photos and videos (<code>DATA_DIR/uploads/&lt;uid&gt;/</code>) and any Coach credential stored for them. Not reversible. The body carries the account's name, typed back by its owner, and the same proof as setting a password (see OwnerProof): a the server, so for a profile with no password that counts the pairing itself is the proof (audited as <code>device</code>; the app asks the phone's own screen lock first); a profile with one sends the current password from the phone too. Cookie sessions always need the proof. The name and the last-admin rule are checked before the proof is asked. The last admin is refused while any other profile remains (the instance would be left with nobody to run it); the only profile on an instance may delete itself. Clears the caller's cookie; every other session and Bearer token of the account stops working with it. Audited as <code>auth.account.delete</code>, <code>auth.proof.fail</code> with <code>act: account-delete</code>.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
@@ -624,7 +436,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
+    <span class="p-desc">The current password is missing or wrong.<span class="r-sig"><code>{&quot;error&quot;:&quot;your current password is not right&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">409</span>
@@ -642,7 +454,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 
 <section class="api-sec" id="pairing">
   <h2>Pairing</h2>
-  <p class="sub">Mobile-app pairing (code from a signed-in browser tab)</p>
+  <p class="sub">Mobile app pairing with a short code</p>
   <div class="eps">
 
 <details class="ep" id="op-pairCreate">
@@ -653,7 +465,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Mint a pairing code for the mobile app</span>
   </summary>
   <div class="ep-body">
-<p>Called from an already signed-in browser tab (Settings → &quot;Pair the mobile app&quot;). Returns an 8-character code (alphabet without 0/O/1/I) the phone redeems within 5 minutes via /api/pair/redeem. One-shot. One live code per profile: minting a new one retires the previous one. Same proof as a device link (a passkey assertion made for this request, or the current password while password sign-in is on), since the phone token a code turns into is renewed for as long as it is used. Audited as <code>auth.pair.create</code>.</p>
+<p>Called from an already signed-in browser tab (Settings → &quot;Pair the mobile app&quot;). Returns an 8-character code (alphabet without 0/O/1/I) the phone redeems within 5 minutes via /api/pair/redeem. One-shot. One live code per profile: minting a new one retires the previous one. Same proof as a device password sign-in is on), since the phone token a code turns into is renewed for as long as it is used. Audited as <code>auth.pair.create</code>.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
 
 <p class="ep-h">Request body</p><p class="p-desc"><a href="#schema-OwnerProof">OwnerProof</a></p>
@@ -669,7 +481,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
+    <span class="p-desc">The current password is missing or wrong.<span class="r-sig"><code>{&quot;error&quot;:&quot;your current password is not right&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">429</span>
@@ -722,8 +534,101 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 
 <section class="api-sec" id="password">
   <h2>Password</h2>
-  <p class="sub">Optional name-and-password sign-in (<code>PASSWORD_LOGIN=1</code>). Every route here is a 404 while the flag is off.</p>
+  <p class="sub">Password login, reset, and account settings</p>
   <div class="eps">
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/login/forgot-password</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Request an email password-reset link</span>
+  </summary>
+  <div class="ep-body">
+<p>Requires PASSWORD_LOGIN. Sends a 256-bit random, single-use link to the account's recovery email. The hash is persisted only after SMTP accepts delivery. Links expire after 30 minutes. Does not change current access. Unknown addresses receive the same queue acknowledgement without mail. Delivery rejection after queuing does not change that public response; it is reported to the server operator without recipient or token details. Requires same-origin CSRF checks; rate-limited by address and email.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">email<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string <span class="p-hint">(email)</span></span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Request accepted; does not reveal account existence</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid email address</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Cross-origin request refused</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Too many requests; Retry-After applies</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Email sending is unavailable; no account changes</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/login/reset-password</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Set a password using a single-use email link</span>
+  </summary>
+  <div class="ep-body">
+<p>Requires PASSWORD_LOGIN and same-origin CSRF checks. Expired, used, superseded or invalidated tokens are rejected. Success ends existing account sessions and returns ok without signing the browser in. Training data and the profile ID are unchanged.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">token<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string <span class="p-hint">(&le; 43 chars)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">password<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string <span class="p-hint">(&le; 256 chars)</span></span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Password changed; use normal username/password sign-in</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid link or password policy failure</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Cross-origin request refused</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Too many attempts</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Password hashing temporarily unavailable</span>
+  </div>
+    </div>
+  </div>
+</details>
 
 <details class="ep" id="op-loginPassword">
   <summary>
@@ -733,7 +638,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Sign in with a profile name or e-mail and a password</span>
   </summary>
   <div class="ep-body">
-<p>Only a profile that has set a password can sign in this way. The identifier is the profile's display name or the e-mail address it added (<code>POST /api/account/email</code>), compared trimmed, NFKC-normalised and case-insensitively. Send it as <code>identifier</code> (what the app sends), <code>name</code> (the original field, still accepted) or <code>email</code>. In <code>identifier</code> and <code>name</code>, a value with an <code>@</code> is looked up as an e-mail first and then as a name; <code>email</code> is looked up only as an e-mail. A wrong password, an unknown name and a name whose profile has no password all get the same <code>401</code> after the same scrypt work, so neither the answer nor its timing says which names exist. So does a password that was right when its check started but was changed, reset or removed before the check finished. Five wrong passwords for an account are free and the sixth pauses it, whichever identifier they named it by (see <i>Throttling</i>); passkey sign-in is never paused by this. Sets the same session cookie as <code>/api/login/verify</code>. <b>Not</b> CSRF-exempt.</p>
+<p>Only a profile that has set a password can sign in this way. The identifier is the profile's display name or the e-mail address it added (<code>POST /api/account/email</code>), compared trimmed, NFKC-normalised and case-insensitively. Send it as <code>identifier</code> (what the app sends), <code>name</code> (the original field, still accepted) or <code>email</code>. In <code>identifier</code> and <code>name</code>, a value with an <code>@</code> is looked up as an e-mail first and then as a name; <code>email</code> is looked up only as an e-mail. A wrong password, an unknown name and a name whose profile has no password all get the same <code>401</code> after the same scrypt work, so neither the answer nor its timing says which names exist. So does a password that was right when its check started but was changed, reset or removed before the check finished. Five wrong passwords for an sign-in is never paused by this. Sets the same session cookie as <code>/api/login/verify</code>. <b>Not</b> CSRF-exempt.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
@@ -793,10 +698,10 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="m post">POST</span>
     <span class="ep-path"><code>/api/register/password</code><span class="ep-chip public">public</span></span>
     <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Create a profile with a name and password</span>
+    <span class="ep-sum">Create a profile with a name, recovery email, and password</span>
   </summary>
   <div class="ep-body">
-<p>For browsers that cannot make a passkey (plain http on a LAN address, some Firefox setups). Creates the profile and signs it in. The same invite rules as passkey registration apply: on an invite-only instance the code is checked first, checked again after hashing, and burned. The password must be 15–256 characters and not one of the passwords guessing scripts try first; no two profiles with a password may share a name. An optional <code>email</code> is stored as the profile's sign-in e-mail (see <code>POST /api/account/email</code>); one that is not an address is refused with <code>400 email-invalid</code>, one that is in use with <code>409 email-taken</code>. Both are asked only after the hash and the second invite check, so without a valid code it is never answered, which counts against the caller's address like a wrong invite code. <b>Not</b> CSRF-exempt.</p>
+<p>Registration rules apply: on an invite-only instance the code is checked first, checked again after hashing, and burned. The password must be 6–256 characters and not one of the passwords guessing scripts try first; profile names must be unique. A required <code>email</code> is stored as the profile's recovery and sign-in e-mail (see <code>POST /api/account/email</code>); one that is not an address is refused with <code>400 email-invalid</code>, one that is in use with <code>409 email-taken</code>. Both are asked only after the hash and the second invite check, so without a valid code it is never answered, which counts against the caller's address like a wrong invite code. <b>Not</b> CSRF-exempt.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
@@ -816,7 +721,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="p-desc">Invite code (INVITE_ONLY only).</span>
   </div>
   <div class="prow">
-    <span class="p-name">email</span>
+    <span class="p-name">email<em class="p-req" title="required">required</em></span>
     <span class="p-type">string <span class="p-hint">(&le; 254 chars)</span></span>
     <span class="p-desc">Optional sign-in e-mail.</span>
   </div>
@@ -834,7 +739,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">400</span>
-    <span class="p-desc">The password breaks the policy with <code>too-short</code> (under 15 characters), <code>too-long</code> (over 256), or <code>too-common</code>; a field is <code>missing</code>; or <code>email-invalid</code>: the <code>email</code> given is not an e-mail address.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password needs at least 15 characters&quot;}</code> &middot; <code>{&quot;error&quot;:&quot;that is not an e-mail address&quot;}</code></span></span>
+    <span class="p-desc">The password breaks the policy with <code>too-short</code> (under 6 characters), <code>too-long</code> (over 256), or <code>too-common</code>; a field is <code>missing</code>; or <code>email-invalid</code>: the <code>email</code> given is not an e-mail address.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password needs at least 6 characters&quot;}</code> &middot; <code>{&quot;error&quot;:&quot;that is not an e-mail address&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
@@ -940,7 +845,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <div class="ptab">
   <div class="prow rrow">
     <span class="r-code s2">200</span>
-    <span class="p-desc">The profile's password state.<span class="r-sig">{ set: boolean, setAt: string | null, passkeys: integer, name: string, nameTaken: boolean, email: string | null }</span></span>
+    <span class="p-desc">The profile's password state.<span class="r-sig">{ set: boolean, setAt: string | null, name: string, nameTaken: boolean, email: string | null }</span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">401</span>
@@ -958,7 +863,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Set or change this profile's password</span>
   </summary>
   <div class="ep-body">
-<p>Proof first: <code>current</code> when the profile has a password, or a passkey assertion made for this request (<code>cid</code> from <code>POST /api/login/options</code>, <code>credential</code> signed by one of <i>this</i> profile's passkeys). The passkey is the only way to set a first password, and the way to replace a forgotten one. A session alone is never enough. Wrong <code>current</code> values count toward the same pause as wrong sign-ins. On success the session version is bumped, which ends every other session and pending pairing code of the account; the caller's own continues on a fresh cookie, or a fresh <code>token</code> for a Bearer caller.</p>
+<p>The current password confirms a change. On success, other sessions and pending pairing codes end; this session gets a fresh cookie or token.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
@@ -972,16 +877,6 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="p-type">string</span>
     <span class="p-desc"></span>
   </div>
-  <div class="prow">
-    <span class="p-name">cid</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">credential</span>
-    <span class="p-type"><a href="#schema-WebAuthnAuthenticationCredential">WebAuthnAuthenticationCredential</a></span>
-    <span class="p-desc"></span>
-  </div>
 </div>
     <p class="ep-h">Responses</p>
     <div class="ptab">
@@ -991,7 +886,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">400</span>
-    <span class="p-desc">The new password breaks the policy (<code>too-short</code> under 15 characters, <code>too-long</code> over 256, or <code>too-common</code>), or a field is <code>missing</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password needs at least 15 characters&quot;}</code></span></span>
+    <span class="p-desc">The new password breaks the policy (<code>too-short</code> under 6 characters, <code>too-long</code> over 256, or <code>too-common</code>), or a field is <code>missing</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password needs at least 6 characters&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">401</span>
@@ -999,53 +894,11 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof: <code>current-required</code>, <code>current-wrong</code>, <code>passkey-required</code> (no password yet, so a passkey has to confirm), or <code>passkey</code> (the assertion did not verify or belongs to another profile).<span class="r-sig"><code>{&quot;error&quot;:&quot;your current password is not right&quot;}</code></span></span>
+    <span class="p-desc">The current password is missing or wrong.<span class="r-sig"><code>{&quot;error&quot;:&quot;your current password is not right&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">409</span>
     <span class="p-desc">Another profile already signs in with this name, or holds it with a reset code that has not been used or expired yet.<span class="r-sig"><code>{&quot;error&quot;:&quot;another profile already signs in with this name&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">429</span>
-    <span class="p-desc">Paused by the sign-in throttle (see <i>Throttling</i> in the description). The request was not looked at; try again after <code>Retry-After</code> seconds.<span class="r-sig"><code>{&quot;error&quot;:&quot;too many attempts, try again later&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s5">503</span>
-    <span class="p-desc">Every password check slot and the short queue behind them are taken.<span class="r-sig"><code>{&quot;error&quot;:&quot;the server is busy, try again in a moment&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-removeAccountPassword">
-  <summary>
-    <span class="m delete">DELETE</span>
-    <span class="ep-path"><code>/api/account/password</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Remove this profile's password</span>
-  </summary>
-  <div class="ep-body">
-<p>Refused while the profile has no passkey: the password would be its last way in. Otherwise the body carries the same proof setting one takes: <code>current</code>, the password itself, or a passkey assertion made for this request (<code>cid</code> from <code>POST /api/login/options</code>, <code>credential</code> signed by one of <i>this</i> profile's passkeys). A session alone is never enough: a stolen cookie must not take away the owner's way in where passkeys do not work. The last-way-in refusal comes before the proof is checked, and is checked again after it. Wrong <code>current</code> values count toward the same pause as wrong sign-ins. Existing sessions are left alone (<code>POST /api/logout/all</code> ends them). A profile without a password gets 200 as well, with no proof asked. Audited as <code>auth.password.remove</code>.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-
-<p class="ep-h">Request body</p><p class="p-desc"><a href="#schema-OwnerProof">OwnerProof</a></p>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Removed (or there was none).<span class="r-sig"><a href="#schema-Ok">Ok</a></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc">The password is the profile's only way in.<span class="r-sig"><code>{&quot;error&quot;:&quot;the password is the only way into this profile&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">429</span>
@@ -1068,7 +921,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </summary>
   <div class="ep-body">
 <p>An e-mail address to type at <code>POST /api/login/password</code> instead of the profile name. No mail is ever sent to it (there is no verification and no reset mail; resets stay the admin's one-time code), so it is only an identifier. Stored trimmed, NFKC-normalised and lower-cased; at most 254 characters; unique across every profile, and never another password-holding profile's name. An empty or null <code>email</code> removes it (as <code>DELETE</code> does).</p>
-<p>The body carries the same proof as setting a password (see OwnerProof): a session alone is never enough. Saving the address the profile already has answers 200 with no proof asked. An address in use by another profile is refused only after the proof, with <code>409 email-taken</code>, and counts against the caller's address and account (20 free, then 30 s doubling to 15 min), so the answer never costs less than a passkey prompt or a password check, and runs out after a few tries. It says an address is in use somewhere on this instance, never by whom. Audited as <code>auth.email.set</code> / <code>auth.email.change</code> with the address masked (<code>a…@e…</code>).</p>
+<p>The body carries the same proof as setting a password (see OwnerProof): a session alone is never enough. Saving the address the profile already has answers 200 with no proof asked. An address in use by another profile is refused only after the proof, with <code>409 email-taken</code>, and counts against the caller's address and account (20 free, then 30 s doubling to 15 min), so the answer never costs less than a address is in use somewhere on this instance, never by whom. Audited as <code>auth.email.set</code> / <code>auth.email.change</code> with the address masked (<code>a…@e…</code>).</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
@@ -1092,7 +945,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
+    <span class="p-desc">The current password is missing or wrong.<span class="r-sig"><code>{&quot;error&quot;:&quot;your current password is not right&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">409</span>
@@ -1134,7 +987,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
+    <span class="p-desc">The current password is missing or wrong.<span class="r-sig"><code>{&quot;error&quot;:&quot;your current password is not right&quot;}</code></span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">429</span>
@@ -1143,366 +996,6 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s5">503</span>
     <span class="p-desc">Every password check slot and the short queue behind them are taken.<span class="r-sig"><code>{&quot;error&quot;:&quot;the server is busy, try again in a moment&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-  </div>
-</section>
-
-<section class="api-sec" id="passkeys">
-  <h2>Passkeys</h2>
-  <p class="sub">More than one passkey on a profile: list, add, rename, remove, plus one-time device links, which let another device of the same person add a passkey of its own.</p>
-  <div class="eps">
-
-<details class="ep" id="op-listPasskeys">
-  <summary>
-    <span class="m get">GET</span>
-    <span class="ep-path"><code>/api/account/passkeys</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">This profile's passkeys</span>
-  </summary>
-  <div class="ep-body">
-<p>Every passkey that signs this profile in, without key material. <code>created</code> and <code>lastUsed</code> are null for a passkey made before they were recorded.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-
-
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">The list, and what it allows.<span class="r-sig"><a href="#schema-PasskeyList">PasskeyList</a></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-removePasskey">
-  <summary>
-    <span class="m delete">DELETE</span>
-    <span class="ep-path"><code>/api/account/passkeys</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Remove one passkey</span>
-  </summary>
-  <div class="ep-body">
-<p>Refused while it is the profile's last way in: its only passkey, and no password that can sign in (a password counts only while <code>PASSWORD_LOGIN</code> is on). Otherwise the body carries the same proof adding one takes (<code>OwnerProof</code>): a session alone is never enough, since a stolen cookie could otherwise choose which of the owner's passkeys is left. Any of the profile's passkeys may confirm, the one being removed included. The 404 and 409 refusals come before the proof is checked, and the last-way-in rule is checked again after it. Audited as <code>auth.passkey.remove</code>. An unused device code of the profile is dropped too, so one made with the removed passkey cannot add another afterwards.</p>
-<p>Sessions are not tied to the passkey that opened them, so a session it already opened carries on; <code>POST /api/logout/all</code> ends those.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-<p class="ep-h">Query parameters</p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">id<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc">The passkey's <code>id</code> from the list (its WebAuthn credential id).</span>
-  </div>
-</div>
-<p class="ep-h">Request body</p><p class="p-desc"><a href="#schema-OwnerProof">OwnerProof</a></p>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Removed. The list as it is now.<span class="r-sig">object</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">404</span>
-    <span class="p-desc">No passkey of this profile has that id.<span class="r-sig"><code>{&quot;error&quot;:&quot;passkey not found&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc">It is the profile's last way in.<span class="r-sig"><code>{&quot;error&quot;:&quot;this passkey is the only way into this profile&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">429</span>
-    <span class="p-desc">Paused by the sign-in throttle (see <i>Throttling</i> in the description). The request was not looked at; try again after <code>Retry-After</code> seconds.<span class="r-sig"><code>{&quot;error&quot;:&quot;too many attempts, try again later&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s5">503</span>
-    <span class="p-desc">Every password check slot and the short queue behind them are taken.<span class="r-sig"><code>{&quot;error&quot;:&quot;the server is busy, try again in a moment&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-addPasskeyOptions">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/account/passkeys/options</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Add a passkey (step 1): prove it is you, get creation options</span>
-  </summary>
-  <div class="ep-body">
-<p>A session alone is never enough to add a way in that outlives &quot;sign out everywhere&quot;. The body carries the same proof <code>POST /api/account/password</code> takes: a passkey assertion made for this request (<code>cid</code> from <code>POST /api/login/options</code>, <code>credential</code> signed by one of <i>this</i> profile's passkeys), or <code>current</code>, the profile's password, only while <code>PASSWORD_LOGIN</code> is on. With it off, a password kept from before is not checked at all and the answer is <code>passkey-required</code>, so a password-only profile has to move onto a passkey while the flag is still on. Wrong passwords count toward the sign-in pause.</p>
-<p>The options use the profile's own user handle and list its passkeys in <code>excludeCredentials</code>, so an authenticator that already holds one refuses. The challenge is good for 5 minutes, for this profile, and only while the session version is unchanged.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-
-<p class="ep-h">Request body</p><p class="p-desc"><a href="#schema-OwnerProof">OwnerProof</a></p>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Ceremony options.<span class="r-sig">{ cid: string, options: <a href="#schema-WebAuthnRegistrationOptions">WebAuthnRegistrationOptions</a> }</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc">The profile already has the most passkeys it can have (20).<span class="r-sig"><code>{&quot;error&quot;:&quot;a profile can have at most 20 passkeys&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">429</span>
-    <span class="p-desc">Paused by the sign-in throttle (see <i>Throttling</i> in the description). The request was not looked at; try again after <code>Retry-After</code> seconds.<span class="r-sig"><code>{&quot;error&quot;:&quot;too many attempts, try again later&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s5">503</span>
-    <span class="p-desc">Every password check slot and the short queue behind them are taken.<span class="r-sig"><code>{&quot;error&quot;:&quot;the server is busy, try again in a moment&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-addPasskeyVerify">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/account/passkeys/verify</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Add a passkey (step 2): store the new one</span>
-  </summary>
-  <div class="ep-body">
-<p>Verifies the attestation against the challenge from step 1 and stores the passkey on this profile. Audited as <code>auth.passkey.add</code>, with the proof that allowed it.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">cid<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">credential<em class="p-req" title="required">required</em></span>
-    <span class="p-type"><a href="#schema-WebAuthnRegistrationCredential">WebAuthnRegistrationCredential</a></span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">name</span>
-    <span class="p-type">string <span class="p-hint">(&le; 40 chars)</span></span>
-    <span class="p-desc">A label of the owner's choosing (&quot;Work laptop&quot;).</span>
-  </div>
-</div>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Added. The list as it is now.<span class="r-sig">object</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc">Challenge expired, replayed or made for another profile, or the attestation did not verify.<span class="r-sig"><code>{&quot;error&quot;:&quot;challenge expired, try again&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">Not signed in, including a session that was ended (&quot;sign out everywhere&quot;, a new password) after step 1.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc"><code>credential-exists</code> (that passkey is already registered) or <code>passkey-limit</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;credential already registered&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-renamePasskey">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/account/passkeys/rename</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Name one passkey</span>
-  </summary>
-  <div class="ep-body">
-<p>An empty name clears it; the app then shows a numbered &quot;Passkey n&quot;.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">id<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">name</span>
-    <span class="p-type">string <span class="p-hint">(&le; 40 chars)</span></span>
-    <span class="p-desc"></span>
-  </div>
-</div>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Renamed. The list as it is now.<span class="r-sig">object</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">404</span>
-    <span class="p-desc">No passkey of this profile has that id.<span class="r-sig"><code>{&quot;error&quot;:&quot;passkey not found&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-createDeviceLink">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/account/device-link</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Make a one-time device link</span>
-  </summary>
-  <div class="ep-body">
-<p>For adding another device of the same person: returns a code of 12 characters from the pairing alphabet (60 bits), which the app also shows as a QR code of <code>&lt;app&gt;?link=&lt;code&gt;</code>. The other device redeems it with <code>/api/device-link/*</code> by creating a passkey of its own. The code is shown once, stored only as a SHA-256, good for 10 minutes and for one passkey; a newer one replaces it, and signing out everywhere, a new password, an admin reset or a disable drop it. Same proof as adding a passkey. Audited as <code>auth.link.create</code>.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
-
-<p class="ep-h">Request body</p><p class="p-desc"><a href="#schema-OwnerProof">OwnerProof</a></p>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">The code, once.<span class="r-sig">{ code: string, expires: number }</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">No acceptable proof that the owner is here: <code>passkey-required</code> (no password that counts, because none is set or <code>PASSWORD_LOGIN</code> is off, so a passkey has to confirm), <code>passkey</code> (the assertion did not verify, belongs to another profile, or was made for another challenge, one handed out for another ceremony or one already used), <code>current-required</code> or <code>current-wrong</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;confirm with your passkey first&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc">The profile already has the most passkeys it can have (20).<span class="r-sig"><code>{&quot;error&quot;:&quot;a profile can have at most 20 passkeys&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">429</span>
-    <span class="p-desc">Paused by the sign-in throttle (see <i>Throttling</i> in the description). The request was not looked at; try again after <code>Retry-After</code> seconds.<span class="r-sig"><code>{&quot;error&quot;:&quot;too many attempts, try again later&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s5">503</span>
-    <span class="p-desc">Every password check slot and the short queue behind them are taken.<span class="r-sig"><code>{&quot;error&quot;:&quot;the server is busy, try again in a moment&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-deviceLinkOptions">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/device-link/options</code><span class="ep-chip public">public</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Redeem a device link (step 1): check the code, get creation options</span>
-  </summary>
-  <div class="ep-body">
-<p>Called on the other device, which has no session: the code is the credential. Returns creation options for the profile the code belongs to, and that profile's id and name. Does not use the code up, so a dismissed passkey prompt can be tried again. Wrong codes count toward a per-address pause of link redemption (see <i>Throttling</i>). <b>Not</b> CSRF-exempt.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">code<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc">Case, spaces and dashes are ignored.</span>
-  </div>
-</div>
-<pre><code>{
-  &quot;code&quot;: &quot;K7WQ-2MZP-4HXA&quot;
-}</code></pre>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Ceremony options.<span class="r-sig">{ cid: string, options: <a href="#schema-WebAuthnRegistrationOptions">WebAuthnRegistrationOptions</a>, id: string, name: string, recovery: boolean }</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc">The code is wrong, used, replaced or expired, or its profile is gone or disabled: one answer for all of them.<span class="r-sig"><code>{&quot;error&quot;:&quot;that code is wrong, used or expired&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc">The profile already has the most passkeys it can have (20).<span class="r-sig"><code>{&quot;error&quot;:&quot;a profile can have at most 20 passkeys&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">429</span>
-    <span class="p-desc">Paused by the sign-in throttle (see <i>Throttling</i> in the description). The request was not looked at; try again after <code>Retry-After</code> seconds.<span class="r-sig"><code>{&quot;error&quot;:&quot;too many attempts, try again later&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
-<details class="ep" id="op-deviceLinkVerify">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/device-link/verify</code><span class="ep-chip public">public</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Redeem a device link (step 2): store the passkey and sign this device in</span>
-  </summary>
-  <div class="ep-body">
-<p>Verifies the attestation against the challenge from step 1 (which must have been made for this very code), stores the passkey on the code's profile, burns the code and sets the session cookie; the passkey just made is what signs the device in. Of two requests racing with one code, one wins. Audited as <code>auth.link.ok</code> (a recovery code as <code>auth.recovery.ok</code>), and every refusal as <code>auth.link.fail</code>. A recovery code also works on a profile at the passkey limit: the passkey used longest ago is removed to make room. <b>Not</b> CSRF-exempt.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">code<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">cid<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">credential<em class="p-req" title="required">required</em></span>
-    <span class="p-type"><a href="#schema-WebAuthnRegistrationCredential">WebAuthnRegistrationCredential</a></span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">name</span>
-    <span class="p-type">string <span class="p-hint">(&le; 40 chars)</span></span>
-    <span class="p-desc"></span>
-  </div>
-</div>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">Added and signed in.<span class="r-sig">{ user: <a href="#schema-SessionUser">SessionUser</a> } &middot; sets <code>Set-Cookie</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc"><code>link-invalid</code> (see below), a challenge that expired or was made for another code, or an attestation that did not verify.<span class="r-sig"><code>{&quot;error&quot;:&quot;that code is wrong, used or expired&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">409</span>
-    <span class="p-desc"><code>credential-exists</code> or <code>passkey-limit</code>.<span class="r-sig"><code>{&quot;error&quot;:&quot;credential already registered&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">429</span>
-    <span class="p-desc">Paused by the sign-in throttle (see <i>Throttling</i> in the description). The request was not looked at; try again after <code>Retry-After</code> seconds.<span class="r-sig"><code>{&quot;error&quot;:&quot;too many attempts, try again later&quot;}</code></span></span>
   </div>
     </div>
   </div>
@@ -2638,51 +2131,6 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="sub">Admin dashboard. Requires an admin session (<code>ADMIN_UIDS</code> or <code>admin:true</code>)</p>
   <div class="eps">
 
-<details class="ep" id="op-adminRecoveryCode">
-  <summary>
-    <span class="m post">POST</span>
-    <span class="ep-path"><code>/api/admin/user/recovery</code><span class="ep-chip admin">admin</span></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Make a one-time recovery code (#584)</span>
-  </summary>
-  <div class="ep-body">
-<p>For someone who lost every way in, on any instance (with or without <code>PASSWORD_LOGIN</code>). Returns a code (12 characters from the pairing alphabet, 60 bits), shown once, stored only as a SHA-256, valid for 24 h. The person redeems it like a device link (<code>POST /api/device-link/options</code> and <code>/verify</code>): the device they use gets a new passkey for the profile and is signed in. Making it bumps the profile's session version (every session, pending pairing code and device link ends); passkeys and the password stay. A newer code replaces an older one.</p>
-<p>Any admin may make one for a profile that is not an admin; only the owner for an admin; nobody for the owner (403 <code>owner</code>: the owner uses the server command <code>node recover.js &lt;name&gt;</code>), for oneself (400 <code>self</code>) or for a disabled profile (400 <code>disabled</code>). Audited as <code>admin.recovery.create</code>; a refusal for an admin as <code>admin.denied</code>.</p>
-    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Admin only: a signed-in session whose user is an admin (<code>ADMIN_UIDS</code> or <code>admin:true</code>), as the session cookie or a Bearer token.</span></p>
-
-<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
-  <div class="prow">
-    <span class="p-name">id<em class="p-req" title="required">required</em></span>
-    <span class="p-type">string</span>
-    <span class="p-desc">The user id.</span>
-  </div>
-</div>
-    <p class="ep-h">Responses</p>
-    <div class="ptab">
-  <div class="prow rrow">
-    <span class="r-code s2">200</span>
-    <span class="p-desc">The code, once.<span class="r-sig">{ ok: always true, name: string, code: string, expires: number }</span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">400</span>
-    <span class="p-desc">Oneself, or a disabled profile.<span class="r-sig"><code>{&quot;error&quot;:&quot;enable the account first&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">401</span>
-    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">403</span>
-    <span class="p-desc">Not an admin; an admin who is not the owner asking for an admin; or the target is the owner.<span class="r-sig"><code>{&quot;error&quot;:&quot;the owner recovers with the server command (recover.js)&quot;}</code></span></span>
-  </div>
-  <div class="prow rrow">
-    <span class="r-code s4">404</span>
-    <span class="p-desc">No user with that id.<span class="r-sig"><code>{&quot;error&quot;:&quot;no such user&quot;}</code></span></span>
-  </div>
-    </div>
-  </div>
-</details>
-
 <details class="ep" id="op-adminPasswordReset">
   <summary>
     <span class="m post">POST</span>
@@ -2691,7 +2139,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Issue a one-time password reset code</span>
   </summary>
   <div class="ep-body">
-<p>Returns a code (12 characters from the pairing alphabet, 60 bits) that is shown once, stored only as a SHA-256, valid for 24 h and good for one <code>POST /api/login/password-reset</code>. Issuing it removes the profile's current password and bumps its session version (every session and pending pairing code ends); passkeys keep working. A newer code replaces an older one. Admin accounts are refused; an admin sets their own password in Settings. Audited as <code>admin.password.reset</code>.</p>
+<p>Returns a code (12 characters from the pairing alphabet, 60 bits) that is shown once, stored only as a SHA-256, valid for 24 h and good for one <code>POST /api/login/password-reset</code>. Issuing it removes the profile's current password and bumps its session version (every session and pending pairing code ends); refused; an admin sets their own password in Settings. Audited as <code>admin.password.reset</code>.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Admin only: a signed-in session whose user is an admin (<code>ADMIN_UIDS</code> or <code>admin:true</code>), as the session cookie or a Bearer token.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
@@ -2858,7 +2306,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Delete a user and everything of theirs</span>
   </summary>
   <div class="ep-body">
-<p>Removes the account for good: the user record, their passkeys, their push subscriptions, their live presence, their training history file, their uploaded photos and videos (<code>DATA_DIR/uploads/&lt;uid&gt;/</code>) and any Coach credential stored for them. Not reversible; <code>/api/admin/user/disable</code> is the reversible one. An admin cannot delete their own account, the last admin and the owner cannot be deleted, and only the owner deletes another admin. Audited by name, since the id stops meaning anything.</p>
+<p>subscriptions, their live presence, their training history file, their uploaded photos and videos (<code>DATA_DIR/uploads/&lt;uid&gt;/</code>) and any Coach credential stored for them. Not reversible; <code>/api/admin/user/disable</code> is the reversible one. An admin cannot delete their own account, the last admin and the owner cannot be deleted, and only the owner deletes another admin. Audited by name, since the id stops meaning anything.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Admin only: a signed-in session whose user is an admin (<code>ADMIN_UIDS</code> or <code>admin:true</code>), as the session cookie or a Bearer token.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
@@ -3129,7 +2577,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <div class="ptab">
   <div class="prow rrow">
     <span class="r-code s2">200</span>
-    <span class="p-desc">One page of the log.<span class="r-sig">{ events: <a href="#schema-AuditEvent">AuditEvent</a>[], total: integer, nextBefore: integer | null, enabled: boolean, ip_mode: &quot;off&quot; | &quot;net&quot; | &quot;full&quot;, retention: object, now: number }</span></span>
+    <span class="p-desc">One page of the log.<span class="r-sig">{ events: <a href="#schema-AuditEvent">AuditEvent</a>[], total: integer, nextBefore: integer | null, enabled: boolean, ip_mode: false | &quot;net&quot; | &quot;full&quot;, retention: object, now: number }</span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">401</span>
@@ -3510,9 +2958,9 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
 </details>
 
-<details class="ep sch" id="schema-PasskeyList">
+<details class="ep sch" id="schema-OwnerProof">
   <summary>
-    <span class="sch-name"><code>PasskeyList</code></span>
+    <span class="sch-name"><code>OwnerProof</code></span>
     <span class="ep-chev" aria-hidden="true"></span>
     <span class="ep-sum"></span>
   </summary>
@@ -3520,77 +2968,9 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 
 <div class="ptab">
   <div class="prow">
-    <span class="p-name">passkeys</span>
-    <span class="p-type">object[]</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">passkeys[].id</span>
+    <span class="p-name">current<em class="p-req" title="required">required</em></span>
     <span class="p-type">string</span>
-    <span class="p-desc">WebAuthn credential id (base64url).</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">passkeys[].name</span>
-    <span class="p-type">string | null</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">passkeys[].created</span>
-    <span class="p-type">string | null</span>
-    <span class="p-desc">ISO timestamp.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">passkeys[].lastUsed</span>
-    <span class="p-type">string | null</span>
-    <span class="p-desc">ISO timestamp of the last sign-in or confirmation with it.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">passkeys[].transports</span>
-    <span class="p-type">string[]</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">password</span>
-    <span class="p-type">boolean</span>
-    <span class="p-desc">The profile has a password and <code>PASSWORD_LOGIN</code> is on, so <code>current</code> can prove an addition or a removal.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">lastWayIn</span>
-    <span class="p-type">boolean</span>
-    <span class="p-desc">Removing any one passkey would be refused (409 <code>last-way-in</code>).</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">deleteBlocked</span>
-    <span class="p-type">&quot;last-admin&quot;</span>
-    <span class="p-desc">Present when deleting this profile (<code>POST /api/account/delete</code>) would be refused before any proof is checked: <code>last-admin</code>, the only admin while other profiles remain. The delete sheet says so before asking for a passkey or the password; the delete itself still checks.</span>
-  </div>
-</div>
-  </div>
-</details>
-
-<details class="ep sch" id="schema-OwnerProof">
-  <summary>
-    <span class="sch-name"><code>OwnerProof</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">Either a passkey assertion made for this request (<code>cid</code> + <code>credential</code>), or the profile's current password (<code>current</code>), which counts only while <code>PASSWORD_LOGIN</code> is on.</span>
-  </summary>
-  <div class="ep-body">
-<p>Each assertion is good for one request: its challenge is spent by it.</p>
-<div class="ptab">
-  <div class="prow">
-    <span class="p-name">cid</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">From POST /api/login/options.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">credential</span>
-    <span class="p-type"><a href="#schema-WebAuthnAuthenticationCredential">WebAuthnAuthenticationCredential</a></span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">current</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
+    <span class="p-desc">The account's current password.</span>
   </div>
 </div>
   </div>
@@ -3623,218 +3003,6 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow">
     <span class="p-name">admin</span>
     <span class="p-type">boolean</span>
-    <span class="p-desc"></span>
-  </div>
-</div>
-  </div>
-</details>
-
-<details class="ep sch" id="schema-WebAuthnRegistrationOptions">
-  <summary>
-    <span class="sch-name"><code>WebAuthnRegistrationOptions</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">PublicKeyCredentialCreationOptionsJSON.</span>
-  </summary>
-  <div class="ep-body">
-<p>Pass to <code>startRegistration()</code> (@simplewebauthn/browser) or decode for <code>navigator.credentials.create()</code>. Resident keys are required; attestation is <code>none</code>.</p>
-<div class="ptab">
-  <div class="prow">
-    <span class="p-name">challenge</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">rp</span>
-    <span class="p-type">object</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">rp.name</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">rp.id</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">The RP_ID the instance is configured with.</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">user</span>
-    <span class="p-type">object</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">user.id</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url user handle</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">user.name</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">user.displayName</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">pubKeyCredParams</span>
-    <span class="p-type">object[]</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">authenticatorSelection</span>
-    <span class="p-type">object</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">authenticatorSelection.residentKey</span>
-    <span class="p-type">always &quot;required&quot;</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">authenticatorSelection.userVerification</span>
-    <span class="p-type">always &quot;preferred&quot;</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">attestation</span>
-    <span class="p-type">always &quot;none&quot;</span>
-    <span class="p-desc"></span>
-  </div>
-</div>
-  </div>
-</details>
-
-<details class="ep sch" id="schema-WebAuthnRegistrationCredential">
-  <summary>
-    <span class="sch-name"><code>WebAuthnRegistrationCredential</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">RegistrationResponseJSON: the value <code>startRegistration()</code> resolves with (the created credential plus the authenticator's attestation response), sent back verbatim.</span>
-  </summary>
-  <div class="ep-body">
-
-<div class="ptab">
-  <div class="prow">
-    <span class="p-name">id</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url credential id</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">rawId</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">type</span>
-    <span class="p-type">always &quot;public-key&quot;</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response</span>
-    <span class="p-type">object</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.clientDataJSON</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.attestationObject</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.transports</span>
-    <span class="p-type">string[]</span>
-    <span class="p-desc">e.g. [&quot;internal&quot;, &quot;hybrid&quot;], stored for later logins.</span>
-  </div>
-</div>
-  </div>
-</details>
-
-<details class="ep sch" id="schema-WebAuthnAuthenticationOptions">
-  <summary>
-    <span class="sch-name"><code>WebAuthnAuthenticationOptions</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">PublicKeyCredentialRequestOptionsJSON.</span>
-  </summary>
-  <div class="ep-body">
-<p>Pass to <code>startAuthentication()</code>. <code>allowCredentials</code> is empty: the browser offers the user's discoverable passkeys itself.</p>
-<div class="ptab">
-  <div class="prow">
-    <span class="p-name">challenge</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">rpId</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">userVerification</span>
-    <span class="p-type">always &quot;preferred&quot;</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">allowCredentials</span>
-    <span class="p-type">object[]</span>
-    <span class="p-desc">Always empty.</span>
-  </div>
-</div>
-  </div>
-</details>
-
-<details class="ep sch" id="schema-WebAuthnAuthenticationCredential">
-  <summary>
-    <span class="sch-name"><code>WebAuthnAuthenticationCredential</code></span>
-    <span class="ep-chev" aria-hidden="true"></span>
-    <span class="ep-sum">AuthenticationResponseJSON: the value <code>startAuthentication()</code> resolves with, sent back verbatim.</span>
-  </summary>
-  <div class="ep-body">
-
-<div class="ptab">
-  <div class="prow">
-    <span class="p-name">id</span>
-    <span class="p-type">string</span>
-    <span class="p-desc">base64url credential id</span>
-  </div>
-  <div class="prow">
-    <span class="p-name">rawId</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">type</span>
-    <span class="p-type">always &quot;public-key&quot;</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response</span>
-    <span class="p-type">object</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.clientDataJSON</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.authenticatorData</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.signature</span>
-    <span class="p-type">string</span>
-    <span class="p-desc"></span>
-  </div>
-  <div class="prow">
-    <span class="p-name">response.userHandle</span>
-    <span class="p-type">string</span>
     <span class="p-desc"></span>
   </div>
 </div>

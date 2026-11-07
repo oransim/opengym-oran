@@ -137,7 +137,6 @@
 
             export PORT="$API_PORT"
             export DATA_DIR
-            export RP_ID=''${OPENGYM_RP_ID:-localhost}
             export ORIGIN=''${OPENGYM_ORIGIN:-http://localhost:$WEB_PORT}
             export ALLOW_GUEST=''${ALLOW_GUEST:-1}
 

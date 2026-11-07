@@ -5,6 +5,8 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Routines from './Routines.jsx'
 import { DEF, useStore } from '../store/useStore.js'
+import catalog from '../lib/routine-catalog.json'
+
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -57,5 +59,27 @@ describe('Routines root view', () => {
     const made = useStore.getState().S.routines.find(r => r.name === 'New class')
     expect(made?.kind).toBe('visit')
     expect(router.state.location.pathname).toBe(`/routines/r/${made.id}`)
+  })
+
+  it('offers bundled routines and classes as copies without changing current routines', async () => {
+    expect(catalog.routines.filter(r => r.kind === 'visit').map(r => r.name)).toEqual(['yoga', 'Pilates', 'tricking', 'climbing', 'functional'])
+    expect(host.textContent).toContain('Side split routine')
+    expect(host.textContent).toContain('climbing')
+    expect(host.textContent).toContain('Pilates')
+    expect(host.textContent).toContain('functional')
+    await act(async () => button('Add to my routines').click())
+    expect(useStore.getState().S.routines.find(r => r.name === 'Push')).toBeTruthy()
+    expect(useStore.getState().S.routines.find(r => r.name === 'Side split routine')?.id).not.toBe('flex-24e03a58582c')
+    await act(async () => button('Add to my classes').click())
+    expect(useStore.getState().S.routines.some(r => r.kind === 'visit' && r.name === 'yoga')).toBe(true)
+  })
+
+  it('brings along the bundled custom exercise used by Tricking power', async () => {
+    const add = [...host.querySelectorAll('button')].filter(b => b.textContent === 'Add to my routines')
+    await act(async () => add.at(-2).click())
+    const state = useStore.getState().S
+    const routine = state.routines.find(r => r.name === 'Tricking power')
+    expect(routine).toBeTruthy()
+    expect(state.customEx.some(e => e.id === routine.ex[0].id && e.n === 'Tricking power warm-up')).toBe(true)
   })
 })

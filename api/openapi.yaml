@@ -7,124 +7,16 @@ openapi: 3.1.0
 info:
   title: Open Gym Oran API
   version: 1.4.3
-  summary: Passkey (WebAuthn) auth + per-user state storage for Open Gym Oran
+  summary: Password authentication and per-user state storage for Open Gym Oran
   description: |
-    The backend of [Open Gym Oran](https://github.com/oransim/opengym-oran), a free, open-source
-    gym & body-weight tracker. A plain Node server, no framework, JSON-file storage,
-    HMAC-signed session cookies.
+    Open Gym Oran is a self-hosted gym and body-weight tracker. The API uses
+    username and password registration and sign-in, email password reset,
+    signed session cookies, and per-user JSON state. The paired mobile app
+    redeems a short pairing code for a Bearer token.
 
-    ### Authentication
-    Sign-in is by **passkey** (WebAuthn, via `@simplewebauthn/server`). A successful
-    `register/verify` or `login/verify` sets the session cookie; every authenticated
-    route then works with that cookie. The paired mobile app has no shared cookie jar,
-    so it redeems a short pairing code (`/api/pair/redeem`) for the *same* signed token
-    and sends it as `Authorization: Bearer <token>` instead.
-
-    An instance started with `PASSWORD_LOGIN=1` also offers **name-and-password
-    sign-in** (tag `password`): opt-in per profile, scrypt-hashed, throttled, with an
-    admin-issued one-time reset code instead of e-mail. A profile may also add an e-mail
-    address to sign in with instead of its name (`/api/account/email`); no mail is ever
-    sent to it. Its routes set exactly the same cookie. With the flag off (the default)
-    every one of them answers 404.
-
-    ### Throttling
-    The `password` routes are counted per client address: at most 60 requests a minute
-    across them, and wrong answers (a password, a reset code, an invite code on password
-    signup, an e-mail address already in use) pause the address from the 21st on, for 30 s,
-    doubling up to 15 min. Wrong passwords also pause the *account* they were tried
-    against from the 6th on, for 1 min doubling up to 1 h (the same pause whether the account
-    was named by its name or its e-mail), and an identifier that names no account is
-    paused the same way, as typed. A password check counts from the moment it
-    starts, so checks sent at once get no more tries than checks sent one by one. A
-    paused caller gets `429 {"error": …, "code": "locked", "retryAfter": <s>}` with a
-    `Retry-After` header. Passkey sign-up and sign-in and the pairing routes are not
-    throttled (their failures reach the audit log at most ten a minute per address).
-    The two routes that redeem a one-time device link (tag `passkeys`) share
-    the per-address budget, and wrong codes pause the address for link redemption only,
-    from the 21st on, the way wrong reset codes do. Adding or removing a passkey in Settings
-    (`POST /api/account/passkeys/options`, `DELETE /api/account/passkeys`) and making a
-    device code (`POST /api/account/device-link`) spend the per-address budget too, and a
-    current password given there as proof counts like one given at sign-in.
-    The address is the socket's, or with `TRUST_PROXY=1` the one a trusted proxy put in
-    `CF-Connecting-IP` / the last `X-Forwarded-For` entry / `X-Real-IP`; IPv6 clients are
-    counted by /64. Counters live in memory and reset on restart.
-
-    ### Sessions
-    The cookie/bearer value is `<payload>.<hmac>` where the payload is
-    `<uid>:<expiry-ms>:<session-version>`, signed with a per-instance secret
-    (HMAC-SHA256). Sessions last `SESSION_DAYS` (default 90). `POST /api/logout/all`
-    bumps the user's session version, which invalidates every token ever issued for
-    the account.
-
-    ### CSRF
-    State-changing browser requests must come from the app's own origin. The server
-    checks `Sec-Fetch-Site` (falling back to `Origin` vs the configured `ORIGIN`);
-    a mismatch is refused with `403 {"error":"cross-origin request refused","code":"origin-mismatch","expected":ORIGIN}` on any
-    non-GET route, the passkey routes included. Exempt: `pair/redeem`, which the mobile
-    app calls from its own origin (the code in the body is the credential, and the token
-    comes back in the body, never as a cookie), and any request a Bearer token
-    authenticates by itself: a valid session token, with no session cookie beside it, on
-    any route but the sign-in ones — the four passkey routes, the password and reset-code
-    routes and the two device-link routes, which act on the credential in the body, never
-    on a Bearer. A cross-origin request whose Bearer does not buy the exemption is refused
-    before any handler runs: `401 {"error":"not signed in"}` when that Bearer does not
-    verify and is the only credential (a paired app whose token was revoked or expired),
-    the 403 otherwise.
-    The passkey routes were exempt before, on the grounds that the challenge id is a
-    credential; but it is bound to nothing else, so a hostile page could complete the
-    attacker's own passkey sign-in in the victim's browser (login CSRF) and the answer
-    set the victim's session to the attacker's account. The password routes are **not**
-    exempt for the same reason: a hostile page knows a valid name and password of its own.
-
-    ### Environment-dependent behavior
-    - `INVITE_ONLY=1`: registration requires a valid invite code (minted by an admin).
-    - `ALLOW_GUEST=0`: hides the client-side "continue without account" mode; the
-      server merely reports the flag via `GET /api/config` (guest mode never talks to
-      this API at all).
-    - `ADMIN_UIDS=<uid>,<uid>`: user ids treated as admins (a `"admin": true` flag on
-      the user record in `db.json` works too). Admins get the `/api/admin/*` routes.
-      One admin is the owner: the record with `"owner": true`, else the first
-      `ADMIN_UIDS` entry with a profile, else the oldest admin. Only the owner appoints
-      and removes admins, deletes an admin, hands the role on and clears the audit log.
-    - `FIRST_USER_ADMIN` (default off; `1` turns it on): the first profile registered
-      on an instance with no profiles gets that `"admin": true` flag and is the owner. Decided at
-      registration only, never applied to an instance that already has profiles.
-    - `AUDIT_LOG` (default on), `AUDIT_MAX` (default 5000 events), `AUDIT_DAYS`
-      (default 90), `AUDIT_IP` (`off` | `net` | `full`, default off) shape the audit
-      log served by `GET /api/admin/audit`.
-    - `PASSWORD_LOGIN=1`: adds the `password` routes and `password_login: true` in
-      `GET /api/config`. Off by default.
-    - `DEFAULT_LANG` (e.g. `pt-BR`; unset by default): `default_lang` in `GET /api/config`,
-      the language of the sign-in screen and of every profile that never picked one.
-    - `TRUST_PROXY=1`: the throttle reads the client address from proxy headers (set by
-      the bundled `docker-compose.yml`, where only the web container can reach the API).
-    - `MEDIA_UPLOADS` (default on; `0` removes the `media` routes and the `media` block of
-      `GET /api/config`), `MEDIA_QUOTA_MB` (200 per profile, `0` = no cap),
-      `MEDIA_IMAGE_MAX_MB` (2), `MEDIA_GIF_MAX_MB` (8), `MEDIA_VIDEO_MAX_MB` (40),
-      `MEDIA_VIDEO_MAX_SEC` (60), `MEDIA_GC_GRACE_DAYS` (14), `MEDIA_UPLOADS_PER_HOUR` (600
-      per profile), `MEDIA_MIN_FREE_MB` (512, `0` = no floor): photos and videos of custom
-      exercises (tag `media`). Every MB here is 2^20 bytes.
-
-    ### Conventions
-    - Every response body is JSON with `Cache-Control: no-store`. The one exception is
-      `GET /api/media/{hash}`, which answers with the stored file itself
-      (`Cache-Control: private, no-store`).
-    - Errors are always `{"error": "<human-readable message>"}`. The `password`, throttle and
-      `media` routes add a stable `code` for the client to word in its own language.
-    - Unknown method+path pairs return `404 {"error":"not found"}`; an unhandled
-      exception returns `500 {"error":"server error"}`.
-    - Every route that reads a request body requires `Content-Type: application/json`
-      (a `charset` parameter is fine) and answers any other type with
-      `415 {"error":"content-type must be application/json"}` — the types a form can
-      send are the ones that skip the CORS preflight, which is how a cross-site form
-      reached these routes. A request with no body needs no Content-Type. A body that does
-      not parse, or parses to anything but an object (`null`, a string, an array), is
-      `400 {"error":"invalid json"}` on every route that reads one; an empty body counts
-      as `{}`. A body over 5 MiB is `413 {"error":"body too large"}`; the rest of the
-      upload is discarded so the answer reaches the client.
-    - CORS: the request's `Origin` is reflected in `Access-Control-Allow-Origin`
-      **without** `Allow-Credentials`, so cross-origin callers can only ever
-      authenticate with a Bearer token, never with the cookie.
+    Browser writes require the configured ORIGIN. Password attempts are
+    throttled per account and address. Invite-only signup, guest mode,
+    media uploads, and the Coach are controlled by server configuration.
   license:
     name: AGPL-3.0-or-later
     identifier: AGPL-3.0-or-later
@@ -142,17 +34,11 @@ tags:
   - name: meta
     description: Health and public configuration
   - name: auth
-    description: Passkey (WebAuthn) registration and login, sessions
+    description: Account registration, sign-in, and sessions
   - name: pairing
-    description: Mobile-app pairing (code from a signed-in browser tab)
+    description: Mobile app pairing with a short code
   - name: password
-    description: >-
-      Optional name-and-password sign-in (`PASSWORD_LOGIN=1`). Every route here is a 404
-      while the flag is off.
-  - name: passkeys
-    description: >-
-      More than one passkey on a profile: list, add, rename, remove, plus one-time device
-      links, which let another device of the same person add a passkey of its own.
+    description: Password login, reset, and account settings
   - name: data
     description: Per-user state sync (the whole app state as one JSON blob)
   - name: push
@@ -288,7 +174,6 @@ paths:
                     description: >-
                       Present (and true) only when the instance runs with
                       PASSWORD_LOGIN=1; the client then offers name-and-password
-                      sign-in next to passkeys.
                   default_lang:
                     type: string
                     example: pt-BR
@@ -332,209 +217,6 @@ paths:
                   token: { type: string, description: 'Bearer sessions past half their lifetime only: the renewed token.' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-  /api/register/options:
-    post:
-      tags: [auth]
-      operationId: registerOptions
-      summary: 'Start passkey registration (WebAuthn ceremony, step 1)'
-      description: |
-        Returns `PublicKeyCredentialCreationOptions` (from
-        `@simplewebauthn/server`'s `generateRegistrationOptions`) plus a challenge id
-        `cid`. The client passes `options` to
-        `navigator.credentials.create()` (or `@simplewebauthn/browser`'s
-        `startRegistration`) and sends the result to `/api/register/verify` together
-        with the `cid`. Challenges are one-shot and expire after 5 minutes.
-
-        No session required.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name:
-                  type: string
-                  maxLength: 40
-                  description: Display name for the new profile (trimmed, max 40 chars).
-                code:
-                  type: string
-                  description: >-
-                    Invite code, required (and validated) only when the instance
-                    runs with INVITE_ONLY. Compared case-insensitively.
-            example: { name: "Ada", code: "3F9C21A07B54D688" }
-      responses:
-        '200':
-          description: Ceremony options.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid:
-                    type: string
-                    description: One-shot challenge id, echo it back to /api/register/verify.
-                  options:
-                    $ref: '#/components/schemas/WebAuthnRegistrationOptions'
-        '400':
-          description: '`name` missing/empty.'
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "name required" }
-        '403':
-          description: Instance is invite-only and the code is missing, used, or revoked.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "a valid invite code is required", code: "invite" }
-
-  /api/register/verify:
-    post:
-      tags: [auth]
-      operationId: registerVerify
-      summary: 'Finish passkey registration (WebAuthn ceremony, step 2)'
-      description: |
-        Verifies the authenticator's attestation response against the stored
-        challenge (`verifyRegistrationResponse`), creates the user + credential, and
-        signs the caller in (sets the session cookie). On an invite-only instance the
-        invite is re-checked and burned here.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [cid, credential]
-              properties:
-                cid:
-                  type: string
-                  description: The challenge id from /api/register/options.
-                credential:
-                  $ref: '#/components/schemas/WebAuthnRegistrationCredential'
-      responses:
-        '200':
-          description: Registered and signed in. The session cookie is set.
-          headers:
-            Set-Cookie:
-              description: >-
-                Session cookie (`__Host-gymsid` on HTTPS deployments, `gymsid` over
-                plain http). HttpOnly, SameSite=Lax, Max-Age = SESSION_DAYS.
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user: { $ref: '#/components/schemas/SessionUser' }
-        '400':
-          description: >-
-            Challenge expired/replayed, or the attestation did not verify (wrong
-            origin/RP ID, malformed response…). The message is human-readable.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "challenge expired, try again", code: "challenge-expired" }
-        '403':
-          description: Invite-only and the code became invalid since step 1.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "invite code is no longer valid, ask for a new one", code: "invite" }
-        '409':
-          description: This credential id is already registered.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "credential already registered" }
-
-  /api/login/options:
-    post:
-      tags: [auth]
-      operationId: loginOptions
-      summary: 'Start passkey login (WebAuthn ceremony, step 1)'
-      description: |
-        Returns `PublicKeyCredentialRequestOptions`
-        (`generateAuthenticationOptions` with an empty `allowCredentials`; discoverable
-        credentials / resident keys are required at registration, so the browser offers
-        the user their passkeys itself) plus a one-shot challenge id `cid`.
-        Takes no request body.
-      security: []
-      responses:
-        '200':
-          description: Ceremony options.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid: { type: string }
-                  options:
-                    $ref: '#/components/schemas/WebAuthnAuthenticationOptions'
-
-  /api/login/verify:
-    post:
-      tags: [auth]
-      operationId: loginVerify
-      summary: 'Finish passkey login (WebAuthn ceremony, step 2)'
-      description: |
-        Verifies the assertion (`verifyAuthenticationResponse`), updates the signature
-        counter, and signs the caller in (sets the session cookie).
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [cid, credential]
-              properties:
-                cid:
-                  type: string
-                  description: The challenge id from /api/login/options.
-                credential:
-                  $ref: '#/components/schemas/WebAuthnAuthenticationCredential'
-      responses:
-        '200':
-          description: Signed in. The session cookie is set.
-          headers:
-            Set-Cookie:
-              description: Session cookie (see /api/register/verify).
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user: { $ref: '#/components/schemas/SessionUser' }
-        '400':
-          description: Challenge expired/replayed, or the assertion did not verify.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "not verified" }
-        '403':
-          description: The account has been disabled by an admin.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "this account has been disabled", code: "disabled" }
-        '404':
-          description: The passkey's credential id is unknown to this instance.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "unknown passkey, create a profile first", code: "unknown-credential" }
-        '500':
-          description: Credential exists but its user record is missing (corrupt db).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "user missing" }
-
   /api/logout:
     post:
       tags: [auth]
@@ -564,7 +246,6 @@ paths:
       description: |
         Bumps the account's session version, which invalidates **every** cookie and
         Bearer token ever issued for it, on every device, including a copy someone
-        walked off with. Passkeys are untouched; signing back in works immediately.
         Also clears the caller's own cookie. Unredeemed pairing codes for the account
         are voided too.
       responses:
@@ -586,13 +267,10 @@ paths:
       summary: Delete your own account and everything of yours
       description: |
         The signed-in account removes itself for good, with the same clean-up as
-        `/api/admin/user/delete`: the user record, their passkeys, their push
         subscriptions, their live presence, their training history file, their
         uploaded photos and videos (`DATA_DIR/uploads/<uid>/`) and any Coach credential
         stored for them. Not reversible. The body carries the account's name, typed back
         by its owner, and the same proof as setting a password (see OwnerProof): a
-        passkey assertion made for this request, or the current password while
-        `PASSWORD_LOGIN` is on. A paired phone (Bearer token) cannot hold a passkey for
         the server, so for a profile with no password that counts the pairing itself is
         the proof (audited as `device`; the app asks the phone's own screen lock first);
         a profile with one sends the current password from the phone too. Cookie
@@ -601,7 +279,6 @@ paths:
         instance would be left with nobody to run it); the only profile on an instance
         may delete itself. Clears the caller's cookie; every other session and Bearer
         token of the account stops working with it. Audited as `auth.account.delete`,
-        with the name and the proof it was made with (`passkey`, `password`, `device`); a refused proof as
         `auth.proof.fail` with `act: account-delete`.
       requestBody:
         required: true
@@ -651,7 +328,6 @@ paths:
         app"). Returns an 8-character code (alphabet without 0/O/1/I) the phone
         redeems within 5 minutes via /api/pair/redeem. One-shot. One live code per
         profile: minting a new one retires the previous one. Same proof as a device
-        link (a passkey assertion made for this request, or the current password while
         password sign-in is on), since the phone token a code turns into is renewed for
         as long as it is used. Audited as `auth.pair.create`.
       requestBody:
@@ -790,7 +466,6 @@ paths:
         the same `401` after the same scrypt work, so neither the answer nor its timing says
         which names exist. So does a password that was right when its check started but
         was changed, reset or removed before the check finished. Five wrong passwords for an
-        account are free and the sixth pauses it, whichever identifier they named it by (see *Throttling*); passkey
         sign-in is never paused by this. Sets the
         same session cookie as `/api/login/verify`. **Not** CSRF-exempt.
       security: []
@@ -849,14 +524,12 @@ paths:
     post:
       tags: [password]
       operationId: registerPassword
-      summary: Create a profile with a name and password
+      summary: Create a profile with a name, recovery email, and password
       description: |
-        For browsers that cannot make a passkey (plain http on a LAN address, some Firefox
-        setups). Creates the profile and signs it in. The same invite rules as passkey
-        registration apply: on an invite-only instance the code is checked first, checked
-        again after hashing, and burned. The password must be 15–256 characters and not one
-        of the passwords guessing scripts try first; no two profiles with a password may
-        share a name. An optional `email` is stored as the profile's sign-in e-mail (see
+        Registration rules apply: on an invite-only instance the code is checked first, checked
+        again after hashing, and burned. The password must be 6–256 characters and not one
+        of the passwords guessing scripts try first; profile names must be unique.
+        A required `email` is stored as the profile's recovery and sign-in e-mail (see
         `POST /api/account/email`); one that is not an address is refused with `400
         email-invalid`, one that is in use with `409 email-taken`. Both are asked only after the
         hash and the second invite check, so without a valid code it is never answered,
@@ -869,7 +542,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, password]
+              required: [name, password, email]
               properties:
                 name: { type: string, maxLength: 40 }
                 password: { type: string, minLength: 15, maxLength: 256 }
@@ -990,7 +663,6 @@ paths:
                 properties:
                   set: { type: boolean }
                   setAt: { oneOf: [{ type: string }, { type: 'null' }], description: ISO timestamp. }
-                  passkeys: { type: integer, description: 'How many passkeys the profile has; 0 means the password cannot be removed.' }
                   name: { type: string, description: The name to sign in with. }
                   nameTaken:
                     type: boolean
@@ -998,20 +670,15 @@ paths:
                   email:
                     oneOf: [{ type: string }, { type: 'null' }]
                     description: The e-mail this profile may sign in with (POST /api/account/email), or null.
-              example: { set: true, setAt: "2026-09-23T10:00:00.000Z", passkeys: 1, name: "Ada", nameTaken: false, email: "ada@example.com" }
+              example: { set: true, setAt: "2026-09-23T10:00:00.000Z", name: "Ada", nameTaken: false, email: "ada@example.com" }
         '401': { $ref: '#/components/responses/Unauthorized' }
     post:
       tags: [password]
       operationId: setAccountPassword
       summary: Set or change this profile's password
       description: |
-        Proof first: `current` when the profile has a password, or a passkey assertion made
-        for this request (`cid` from `POST /api/login/options`, `credential` signed by one of
-        *this* profile's passkeys). The passkey is the only way to set a first password, and the way to
-        replace a forgotten one. A session alone is never enough. Wrong `current` values
-        count toward the same pause as wrong sign-ins. On success the session version is
-        bumped, which ends every other session and pending pairing code of the account; the
-        caller's own continues on a fresh cookie, or a fresh `token` for a Bearer caller.
+        The current password confirms a change. On success, other sessions
+        and pending pairing codes end; this session gets a fresh cookie or token.
       requestBody:
         required: true
         content:
@@ -1022,8 +689,6 @@ paths:
               properties:
                 next: { type: string, minLength: 15, maxLength: 256 }
                 current: { type: string }
-                cid: { type: string }
-                credential: { $ref: '#/components/schemas/WebAuthnAuthenticationCredential' }
       responses:
         '200':
           description: Saved. Other sessions have ended.
@@ -1040,55 +705,10 @@ paths:
                   token: { type: string, description: 'Bearer callers only: the token to use from now on.' }
         '400': { $ref: '#/components/responses/PasswordPolicy' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403':
-          description: >-
-            No acceptable proof: `current-required`, `current-wrong`, `passkey-required`
-            (no password yet, so a passkey has to confirm), or `passkey` (the assertion did
-            not verify or belongs to another profile).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "your current password is not right", code: "current-wrong" }
+        '403': { $ref: '#/components/responses/ProofRefused' }
         '409': { $ref: '#/components/responses/NameTaken' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/Busy' }
-    delete:
-      tags: [password]
-      operationId: removeAccountPassword
-      summary: Remove this profile's password
-      description: >-
-        Refused while the profile has no passkey: the password would be its last way in.
-        Otherwise the body carries the same proof setting one takes: `current`, the
-        password itself, or a passkey assertion made for this request (`cid` from
-        `POST /api/login/options`, `credential` signed by one of *this* profile's
-        passkeys). A session alone is never enough: a stolen cookie must not take away
-        the owner's way in where passkeys do not work. The last-way-in refusal comes before
-        the proof is checked, and is checked again after it. Wrong `current` values count
-        toward the same pause as wrong sign-ins. Existing sessions are left alone
-        (`POST /api/logout/all` ends them). A profile without a password gets 200 as well,
-        with no proof asked. Audited as `auth.password.remove`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OwnerProof' }
-      responses:
-        '200':
-          description: Removed (or there was none).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Ok' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/ProofRefused' }
-        '409':
-          description: The password is the profile's only way in.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "the password is the only way into this profile", code: "last-way-in" }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-        '503': { $ref: '#/components/responses/Busy' }
-
   /api/account/email:
     post:
       tags: [password]
@@ -1107,7 +727,6 @@ paths:
         no proof asked. An address in use by another profile is refused only after the
         proof, with `409 email-taken`, and counts against the caller's address and account
         (20 free, then 30 s doubling to 15 min), so the answer never costs less than a
-        passkey prompt or a password check, and runs out after a few tries. It says an
         address is in use somewhere on this instance, never by whom. Audited as
         `auth.email.set` / `auth.email.change` with the address masked (`a…@e…`).
       requestBody:
@@ -1177,67 +796,6 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/Busy' }
 
-  /api/admin/user/recovery:
-    post:
-      tags: [admin, passkeys]
-      operationId: adminRecoveryCode
-      summary: 'Admin: make a one-time recovery code (#584)'
-      description: |
-        For someone who lost every way in, on any instance (with or without
-        `PASSWORD_LOGIN`). Returns a code (12 characters from the pairing alphabet, 60 bits),
-        shown once, stored only as a SHA-256, valid for 24 h. The person redeems it like a
-        device link (`POST /api/device-link/options` and `/verify`): the device they use gets a
-        new passkey for the profile and is signed in. Making it bumps the profile's session
-        version (every session, pending pairing code and device link ends); passkeys and the
-        password stay. A newer code replaces an older one.
-
-        Any admin may make one for a profile that is not an admin; only the owner for an
-        admin; nobody for the owner (403 `owner`: the owner uses the server command
-        `node recover.js <name>`), for oneself (400 `self`) or for a disabled profile (400
-        `disabled`). Audited as `admin.recovery.create`; a refusal for an admin as
-        `admin.denied`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id]
-              properties:
-                id: { type: string, description: The user id. }
-      responses:
-        '200':
-          description: The code, once.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean, const: true }
-                  name: { type: string }
-                  code: { type: string }
-                  expires: { type: number, description: Expiry (ms). }
-              example: { ok: true, name: "Ada", code: "K7WQ-2MZP-4HXA", expires: 1790000000000 }
-        '400':
-          description: Oneself, or a disabled profile.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "enable the account first", code: disabled }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403':
-          description: Not an admin; an admin who is not the owner asking for an admin; or the target is the owner.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "the owner recovers with the server command (recover.js)", code: owner }
-        '404':
-          description: No user with that id.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "no such user" }
-
   /api/admin/user/password-reset:
     post:
       tags: [admin, password]
@@ -1248,7 +806,6 @@ paths:
         once, stored only as a SHA-256, valid for 24 h and good for one
         `POST /api/login/password-reset`. Issuing it removes the profile's current password
         and bumps its session version (every session and pending pairing code ends);
-        passkeys keep working. A newer code replaces an older one. Admin accounts are
         refused; an admin sets their own password in Settings. Audited as
         `admin.password.reset`.
       requestBody:
@@ -1288,332 +845,6 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: "no such user" }
         '409': { $ref: '#/components/responses/NameTaken' }
-
-  /api/account/passkeys:
-    get:
-      tags: [passkeys]
-      operationId: listPasskeys
-      summary: This profile's passkeys
-      description: >-
-        Every passkey that signs this profile in, without key material. `created` and
-        `lastUsed` are null for a passkey made before they were recorded.
-      responses:
-        '200':
-          description: The list, and what it allows.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PasskeyList' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-    delete:
-      tags: [passkeys]
-      operationId: removePasskey
-      summary: Remove one passkey
-      description: |
-        Refused while it is the profile's last way in: its only passkey, and no password
-        that can sign in (a password counts only while `PASSWORD_LOGIN` is on). Otherwise
-        the body carries the same proof adding one takes (`OwnerProof`): a session alone is
-        never enough, since a stolen cookie could otherwise choose which of the owner's
-        passkeys is left. Any of the profile's passkeys may confirm, the one being removed
-        included. The 404 and 409 refusals come before the proof is checked, and the
-        last-way-in rule is checked again after it. Audited as `auth.passkey.remove`. An
-        unused device code of the profile is dropped too, so one made with the removed
-        passkey cannot add another afterwards.
-
-        Sessions are not tied to the passkey that opened them, so a session it already
-        opened carries on; `POST /api/logout/all` ends those.
-      parameters:
-        - name: id
-          in: query
-          required: true
-          description: The passkey's `id` from the list (its WebAuthn credential id).
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OwnerProof' }
-      responses:
-        '200':
-          description: Removed. The list as it is now.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/PasskeyList'
-                  - type: object
-                    properties:
-                      ok: { type: boolean, const: true }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/ProofRefused' }
-        '404':
-          description: No passkey of this profile has that id.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "passkey not found", code: "not-found" }
-        '409':
-          description: It is the profile's last way in.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "this passkey is the only way into this profile", code: "last-way-in" }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-        '503': { $ref: '#/components/responses/Busy' }
-
-  /api/account/passkeys/options:
-    post:
-      tags: [passkeys]
-      operationId: addPasskeyOptions
-      summary: 'Add a passkey (step 1): prove it is you, get creation options'
-      description: |
-        A session alone is never enough to add a way in that outlives "sign out
-        everywhere". The body carries the same proof `POST /api/account/password` takes:
-        a passkey assertion made for this request (`cid` from `POST /api/login/options`,
-        `credential` signed by one of *this* profile's passkeys), or `current`, the
-        profile's password, only while `PASSWORD_LOGIN` is on. With it off, a password
-        kept from before is not checked at all and the answer is `passkey-required`, so a
-        password-only profile has to move onto a passkey while the flag is still on. Wrong
-        passwords count toward the sign-in pause.
-
-        The options use the profile's own user handle and list its passkeys in
-        `excludeCredentials`, so an authenticator that already holds one refuses. The
-        challenge is good for 5 minutes, for this profile, and only while the session
-        version is unchanged.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OwnerProof' }
-      responses:
-        '200':
-          description: Ceremony options.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid: { type: string, description: 'One-shot challenge id for /api/account/passkeys/verify.' }
-                  options: { $ref: '#/components/schemas/WebAuthnRegistrationOptions' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/ProofRefused' }
-        '409': { $ref: '#/components/responses/PasskeyLimit' }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-        '503': { $ref: '#/components/responses/Busy' }
-
-  /api/account/passkeys/verify:
-    post:
-      tags: [passkeys]
-      operationId: addPasskeyVerify
-      summary: 'Add a passkey (step 2): store the new one'
-      description: >-
-        Verifies the attestation against the challenge from step 1 and stores the passkey
-        on this profile. Audited as `auth.passkey.add`, with the proof that allowed it.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [cid, credential]
-              properties:
-                cid: { type: string }
-                credential: { $ref: '#/components/schemas/WebAuthnRegistrationCredential' }
-                name: { type: string, maxLength: 40, description: 'A label of the owner''s choosing ("Work laptop").' }
-      responses:
-        '200':
-          description: Added. The list as it is now.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/PasskeyList'
-                  - type: object
-                    properties:
-                      ok: { type: boolean, const: true }
-        '400':
-          description: Challenge expired, replayed or made for another profile, or the attestation did not verify.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "challenge expired, try again", code: "challenge-expired" }
-        '401':
-          description: >-
-            Not signed in, including a session that was ended ("sign out everywhere", a
-            new password) after step 1.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "not signed in" }
-        '409':
-          description: '`credential-exists` (that passkey is already registered) or `passkey-limit`.'
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "credential already registered", code: "credential-exists" }
-
-  /api/account/passkeys/rename:
-    post:
-      tags: [passkeys]
-      operationId: renamePasskey
-      summary: Name one passkey
-      description: An empty name clears it; the app then shows a numbered "Passkey n".
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id]
-              properties:
-                id: { type: string }
-                name: { type: string, maxLength: 40 }
-      responses:
-        '200':
-          description: Renamed. The list as it is now.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/PasskeyList'
-                  - type: object
-                    properties:
-                      ok: { type: boolean, const: true }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404':
-          description: No passkey of this profile has that id.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "passkey not found", code: "not-found" }
-
-  /api/account/device-link:
-    post:
-      tags: [passkeys]
-      operationId: createDeviceLink
-      summary: Make a one-time device link
-      description: |
-        For adding another device of the same person: returns a code of 12 characters from
-        the pairing alphabet (60 bits), which the app also shows as a QR code of
-        `<app>?link=<code>`. The other device redeems it with `/api/device-link/*` by
-        creating a passkey of its own. The code is shown once, stored only as a SHA-256,
-        good for 10 minutes and for one passkey; a newer one replaces it, and signing out
-        everywhere, a new password, an admin reset or a disable drop it. Same proof as
-        adding a passkey. Audited as `auth.link.create`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OwnerProof' }
-      responses:
-        '200':
-          description: The code, once.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code: { type: string }
-                  expires: { type: number, description: Expiry (ms). }
-              example: { code: "K7WQ-2MZP-4HXA", expires: 1790000000000 }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/ProofRefused' }
-        '409': { $ref: '#/components/responses/PasskeyLimit' }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-        '503': { $ref: '#/components/responses/Busy' }
-
-  /api/device-link/options:
-    post:
-      tags: [passkeys]
-      operationId: deviceLinkOptions
-      summary: 'Redeem a device link (step 1): check the code, get creation options'
-      description: |
-        Called on the other device, which has no session: the code is the credential.
-        Returns creation options for the profile the code belongs to, and that profile's
-        id and name. Does not use the code up, so a dismissed passkey prompt can be tried again.
-        Wrong codes count toward a per-address pause of link redemption (see
-        *Throttling*). **Not** CSRF-exempt.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [code]
-              properties:
-                code: { type: string, description: 'Case, spaces and dashes are ignored.' }
-            example: { code: "K7WQ-2MZP-4HXA" }
-      responses:
-        '200':
-          description: Ceremony options.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid: { type: string }
-                  options: { $ref: '#/components/schemas/WebAuthnRegistrationOptions' }
-                  id: { type: string, description: "The profile's id (also the options' user handle). Names are not unique; this is what tells two profiles apart." }
-                  name: { type: string, description: The profile this device is being added to. }
-                  recovery: { type: boolean, description: 'Present (true) when the code is a recovery code (POST /api/admin/user/recovery, recover.js).' }
-        '400': { $ref: '#/components/responses/LinkInvalid' }
-        '409': { $ref: '#/components/responses/PasskeyLimit' }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-
-  /api/device-link/verify:
-    post:
-      tags: [passkeys]
-      operationId: deviceLinkVerify
-      summary: 'Redeem a device link (step 2): store the passkey and sign this device in'
-      description: |
-        Verifies the attestation against the challenge from step 1 (which must have been
-        made for this very code), stores the passkey on the code's profile, burns the code
-        and sets the session cookie; the passkey just made is what signs the device in.
-        Of two requests racing with one code, one wins. Audited as `auth.link.ok` (a recovery
-        code as `auth.recovery.ok`), and every refusal as `auth.link.fail`. A recovery code
-        also works on a profile at the passkey limit: the passkey used longest ago is removed
-        to make room. **Not** CSRF-exempt.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [code, cid, credential]
-              properties:
-                code: { type: string }
-                cid: { type: string }
-                credential: { $ref: '#/components/schemas/WebAuthnRegistrationCredential' }
-                name: { type: string, maxLength: 40 }
-      responses:
-        '200':
-          description: Added and signed in.
-          headers:
-            Set-Cookie:
-              description: Session cookie (see /api/register/verify).
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user: { $ref: '#/components/schemas/SessionUser' }
-        '400':
-          description: >-
-            `link-invalid` (see below), a challenge that expired or was made for another
-            code, or an attestation that did not verify.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "that code is wrong, used or expired", code: "link-invalid" }
-        '409':
-          description: '`credential-exists` or `passkey-limit`.'
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-              example: { error: "credential already registered", code: "credential-exists" }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /api/data:
     get:
@@ -2480,7 +1711,6 @@ paths:
       operationId: adminUserDelete
       summary: 'Admin: delete a user and everything of theirs'
       description: |
-        Removes the account for good: the user record, their passkeys, their push
         subscriptions, their live presence, their training history file, their uploaded
         photos and videos (`DATA_DIR/uploads/<uid>/`) and any Coach credential stored for
         them. Not reversible; `/api/admin/user/disable` is the
@@ -3465,30 +2695,11 @@ components:
           example: { error: "another profile already signs in with this name", code: "name-taken" }
 
     ProofRefused:
-      description: >-
-        No acceptable proof that the owner is here: `passkey-required` (no password that
-        counts, because none is set or `PASSWORD_LOGIN` is off, so a passkey has to confirm),
-        `passkey` (the assertion did not verify, belongs to another profile, or was made
-        for another challenge, one handed out for another ceremony or one already used),
-        `current-required` or `current-wrong`.
+      description: The current password is missing or wrong.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-          example: { error: "confirm with your passkey first", code: "passkey-required" }
-    PasskeyLimit:
-      description: The profile already has the most passkeys it can have (20).
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-          example: { error: "a profile can have at most 20 passkeys", code: "passkey-limit" }
-    LinkInvalid:
-      description: >-
-        The code is wrong, used, replaced or expired, or its profile is gone or disabled:
-        one answer for all of them.
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-          example: { error: "that code is wrong, used or expired", code: "link-invalid" }
+          example: { error: "your current password is not right", code: "current-wrong" }
 
   schemas:
     Error:
@@ -3514,50 +2725,11 @@ components:
       properties:
         ok: { type: boolean, const: true }
 
-    PasskeyList:
-      type: object
-      properties:
-        passkeys:
-          type: array
-          items:
-            type: object
-            properties:
-              id: { type: string, description: WebAuthn credential id (base64url). }
-              name: { oneOf: [{ type: string }, { type: 'null' }] }
-              created: { oneOf: [{ type: string }, { type: 'null' }], description: ISO timestamp. }
-              lastUsed: { oneOf: [{ type: string }, { type: 'null' }], description: 'ISO timestamp of the last sign-in or confirmation with it.' }
-              transports: { type: array, items: { type: string } }
-        password:
-          type: boolean
-          description: >-
-            The profile has a password and `PASSWORD_LOGIN` is on, so `current` can prove
-            an addition or a removal.
-        lastWayIn:
-          type: boolean
-          description: Removing any one passkey would be refused (409 `last-way-in`).
-        deleteBlocked:
-          type: string
-          enum: [last-admin]
-          description: >-
-            Present when deleting this profile (`POST /api/account/delete`) would be refused
-            before any proof is checked: `last-admin`, the only admin while other profiles
-            remain. The delete sheet says so before asking for a passkey or the password; the
-            delete itself still checks.
-      example:
-        passkeys: [{ id: "g3Xq…", name: "Laptop", created: "2026-09-23T10:00:00.000Z", lastUsed: "2026-09-23T10:00:00.000Z", transports: [internal] }]
-        password: false
-        lastWayIn: true
-
     OwnerProof:
       type: object
-      description: >-
-        Either a passkey assertion made for this request (`cid` + `credential`), or the
-        profile's current password (`current`), which counts only while `PASSWORD_LOGIN`
-        is on. Each assertion is good for one request: its challenge is spent by it.
+      required: [current]
       properties:
-        cid: { type: string, description: 'From POST /api/login/options.' }
-        credential: { $ref: '#/components/schemas/WebAuthnAuthenticationCredential' }
-        current: { type: string }
+        current: { type: string, description: The account's current password. }
 
     SessionUser:
       type: object
@@ -3568,94 +2740,6 @@ components:
         owner: { type: boolean, description: Present (true) only for the instance owner. }
         admin: { type: boolean }
       example: { id: "Zk3q9XyPbA2LmN0v", name: "Ada", admin: false }
-
-    # ------------------------------------------------------------------ WebAuthn
-    # These mirror @simplewebauthn/server v13's JSON shapes (themselves the W3C
-    # WebAuthn Level 3 JSON serialization). Clients normally never build them by
-    # hand; @simplewebauthn/browser converts them to/from the navigator.credentials
-    # calls. Documented loosely on purpose; the library owns the details.
-    WebAuthnRegistrationOptions:
-      type: object
-      description: >-
-        PublicKeyCredentialCreationOptionsJSON. Pass to
-        `startRegistration()` (@simplewebauthn/browser) or decode for
-        `navigator.credentials.create()`. Resident keys are required; attestation
-        is `none`.
-      properties:
-        challenge: { type: string, description: base64url }
-        rp:
-          type: object
-          properties:
-            name: { type: string }
-            id: { type: string, description: The RP_ID the instance is configured with. }
-        user:
-          type: object
-          properties:
-            id: { type: string, description: base64url user handle }
-            name: { type: string }
-            displayName: { type: string }
-        pubKeyCredParams: { type: array, items: { type: object } }
-        authenticatorSelection:
-          type: object
-          properties:
-            residentKey: { type: string, const: required }
-            userVerification: { type: string, const: preferred }
-        attestation: { type: string, const: none }
-      additionalProperties: true
-
-    WebAuthnRegistrationCredential:
-      type: object
-      description: >-
-        RegistrationResponseJSON: the value `startRegistration()` resolves with
-        (the created credential plus the authenticator's attestation response),
-        sent back verbatim.
-      properties:
-        id: { type: string, description: base64url credential id }
-        rawId: { type: string }
-        type: { type: string, const: public-key }
-        response:
-          type: object
-          properties:
-            clientDataJSON: { type: string, description: base64url }
-            attestationObject: { type: string, description: base64url }
-            transports:
-              type: array
-              items: { type: string }
-              description: e.g. ["internal", "hybrid"], stored for later logins.
-          additionalProperties: true
-      additionalProperties: true
-
-    WebAuthnAuthenticationOptions:
-      type: object
-      description: >-
-        PublicKeyCredentialRequestOptionsJSON. Pass to `startAuthentication()`.
-        `allowCredentials` is empty: the browser offers the user's discoverable
-        passkeys itself.
-      properties:
-        challenge: { type: string, description: base64url }
-        rpId: { type: string }
-        userVerification: { type: string, const: preferred }
-        allowCredentials: { type: array, items: { type: object }, description: Always empty. }
-      additionalProperties: true
-
-    WebAuthnAuthenticationCredential:
-      type: object
-      description: >-
-        AuthenticationResponseJSON: the value `startAuthentication()` resolves
-        with, sent back verbatim.
-      properties:
-        id: { type: string, description: base64url credential id }
-        rawId: { type: string }
-        type: { type: string, const: public-key }
-        response:
-          type: object
-          properties:
-            clientDataJSON: { type: string }
-            authenticatorData: { type: string }
-            signature: { type: string }
-            userHandle: { type: string }
-          additionalProperties: true
-      additionalProperties: true
 
     # ------------------------------------------------------------------ state sync
     State:

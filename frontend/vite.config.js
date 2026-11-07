@@ -78,7 +78,7 @@ const swStamp = {
 
 // The phone flavour says so in its index.html. A web build that ran into the same dist/ between
 // the mobile build and `cap sync` (two builds in one worktree) shipped the web shell inside an
-// APK: no Android-only settings, a service worker, the passkey login. scripts/check-mobile-bundle.mjs
+// APK: no Android-only settings, a service worker, the account login. scripts/check-mobile-bundle.mjs
 // reads this tag in the synced copy after `cap sync` and fails the build without it.
 const flavor = {
   name: 'opengym-flavor',

@@ -19,7 +19,6 @@ import { mediaStore, mediaStoreInUse } from '../lib/media-store.js'
 import { countChanges, syncFingerprint } from '../lib/sync-changes.js'
 import { saveWorkoutEdit, deleteEditedWorkout } from '../lib/session-edit.js'
 import { appBase } from '../lib/app-base.js'
-import { linkTokenFromSearch, stripLinkFromUrl } from '../lib/device-link.js'
 import { loadRemote, chooseLocal, forgetRemote, connect, normalizeServerUrl, renewToken } from '../lib/remote.js'
 import { loadCfAccess } from '../lib/cf-access.js'
 import { loadCoachDevice, saveCoachDevice, coachDeviceSettings } from '../lib/coach-device.js'
@@ -57,7 +56,7 @@ const STASH_FILE = 'opengym-stash.json'
 // A browser sign-out whose request never reached the server. The session cookie is HttpOnly, so
 // only the server's answer to /api/logout takes it out of the browser; until that answer comes,
 // boot sends the logout again instead of asking /api/me, which would sign the browser straight
-// back in with no passkey or password. Any sign-in replaces the cookie and clears the mark.
+// back in. Any sign-in replaces the cookie and clears the mark.
 const LOGOUT_OWED_KEY = 'gym_logout_owed'
 // A sign-in (or a phone's pairing) whose question about this device's own entries has not been
 // answered yet (adoptProfile): { uid, rejoined, alwaysAsk }. Until it is, nothing syncs — the copy
@@ -1367,9 +1366,6 @@ export const useStore = create((set, get) => {
     // once-per-device record (lib/onboarding-perms.js).
     permSteps: false,
     finishPermSteps() { set({ permSteps: false }) },
-    // A one-time device-link code this page was opened with (?link=, #95), until it is redeemed.
-    // Never persisted: the code is good for minutes and belongs to this one visit.
-    linkCode: null,
     // Mobile build only: how the Coach runs on this phone — { mode: 'off'|'server'|'byok',
     // provider, model, baseUrl } from lib/coach-device.js. Never the key, never a proposal.
     coachLocal: null,
@@ -1594,7 +1590,6 @@ export const useStore = create((set, get) => {
       return configFetch
     },
 
-    // `adopt` (a sign-in, a pairing — { alwaysAsk } for a device link): adoptProfile follows and
     // decides what becomes of this copy; until it has, nothing is pulled or pushed (ADOPT_KEY).
     setUser(u, { adopt } = {}) {
       if (u) {
@@ -1916,7 +1911,6 @@ export const useStore = create((set, get) => {
     },
 
     // Settings → "Delete my account": the server removes the profile and everything of it
-    // (POST /api/account/delete, `name` typed back to confirm, `proof` the owner's: a passkey
     // assertion or the current password, from ProveOwner in components/PasswordAuth.jsx), then
     // this device ends where a sign-out leaves it, and a phone goes back to local-only as a
     // disconnect does. Nothing is kept aside: there is no account left for kept changes or a
@@ -2036,11 +2030,6 @@ export const useStore = create((set, get) => {
         finishBoot()
         return
       }
-      // Opened from a device-link QR code (#95): the code comes off the address at once — a reload,
-      // a bookmark or a shared screenshot of the address bar must not carry it around — and waits
-      // here for the sheet that redeems it (App.jsx, components/Passkeys.jsx).
-      const linkCode = linkTokenFromSearch(window.location.search)
-      if (linkCode) { stripLinkFromUrl(); set({ linkCode }) }
       // Guests never authenticate, so an instance that turned guest mode off has no request to
       // refuse — the only way the switch reaches someone already inside is here, on their next
       // boot. Ending the session needs a positive `allow_guest: false`; see lib/guest.js for why

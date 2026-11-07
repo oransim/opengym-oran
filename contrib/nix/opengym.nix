@@ -21,9 +21,7 @@ let
   apiEnv = lib.filterAttrs (_: v: v != null) {
     PORT = toString cfg.apiPort;
     DATA_DIR = cfg.dataDir;
-    RP_ID = cfg.rpId;
     ORIGIN = cfg.origin;
-    RP_NAME = cfg.rpName;
     SESSION_DAYS = toString cfg.sessionDays;
     ALLOW_GUEST = if cfg.allowGuest then "1" else "0";
     INVITE_ONLY = if cfg.inviteOnly then "1" else "0";
@@ -101,22 +99,10 @@ in
       description = "Port the API listens on (internal, proxied by nginx).";
     };
 
-    rpId = lib.mkOption {
-      type = lib.types.str;
-      default = "localhost";
-      description = "WebAuthn Relying Party ID (bare hostname, must match address bar).";
-    };
-
     origin = lib.mkOption {
       type = lib.types.str;
       default = "http://localhost:8080";
       description = "Full origin URL for CSRF validation (must match address bar).";
-    };
-
-    rpName = lib.mkOption {
-      type = lib.types.str;
-      default = "openGym";
-      description = "Display name for passkey registration prompts.";
     };
 
     sessionDays = lib.mkOption {

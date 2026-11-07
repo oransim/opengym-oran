@@ -332,7 +332,6 @@ export function publicConfig() {
 
 /**
  * The environment a job's provider process gets. Deliberately built from nothing rather than
- * filtered from process.env: the child must not inherit RP_ID, ADMIN_UIDS, VAPID material or
  * anything else this server happens to hold. The credential is passed in already resolved, so
  * this function never decides whose account is being spent.
  */

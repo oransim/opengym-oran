@@ -8,7 +8,7 @@
 export const AREAS = [
   { name: 'Sync & no data loss', re: /sync|undo-merge|merge-state|stamps|durable|data-rev|data-wid|data-reset|data-safety|state-cache|state-read|legacy|undo-concurrent|offline|outbox|conflict|backoff|_rev|remote\.|presence/ },
   { name: 'Coach (AI)', re: /^parse\.|^validate\.|coach|cadence|cohort|adapters|payload|prompt|review-repair|refine-change|jobs\.|warmup\.test|fixture-cli|e2e-apikey|config-migration|categories/ },
-  { name: 'Accounts, auth & security', re: /passkey|password|auth|login|csrf|cors|token|pairing|device-link|account|admin|first-user|rate-limit|anon-flood|credential|cf-access|email|guest|verify-error|recover|csp|audit/ },
+  { name: 'Accounts, auth & security', re: /password|auth|login|csrf|cors|token|pairing|account|admin|first-user|rate-limit|anon-flood|credential|cf-access|email|guest|csp|audit/ },
   { name: 'Import, export & backup', re: /import|export|fit-|csv|hevy|backup|zip|plan-share|qr|scan|clipboard/ },
   { name: 'Plates & equipment', re: /plate|dumbbell|bar\.|bar-|equipment|incline|kg-change/ },
   { name: 'Rest timer & alerts', re: /rest-|rest\.|resttimer|timer|sound|wakelock|live-activity|nudge|reminder|push|notification|sw\.|sw-/ },

@@ -20,7 +20,7 @@ ARG BUILD_DATE=unknown
 
 LABEL maintainer="Oran Simhon https://github.com/oransim" \
     org.opencontainers.image.title="Open Gym Oran API" \
-    org.opencontainers.image.description="Backend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, passkey login. Your data, your server." \
+    org.opencontainers.image.description="Backend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, password login. Your data, your server." \
     org.opencontainers.image.source="https://github.com/oransim/opengym-oran" \
     org.opencontainers.image.url="https://github.com/oransim/opengym-oran" \
     org.opencontainers.image.documentation="https://github.com/oransim/opengym-oran#readme" \
@@ -37,7 +37,7 @@ WORKDIR /app
 RUN apk upgrade --no-cache
 
 # The unprivileged user Coach jobs drop to. Its uid cannot read /data, which is the control that
-# keeps a provider runtime away from users, passkeys and the session secret.
+# keeps a provider runtime away from users, accounts and the session secret.
 #
 # Not optional, and not only for the real providers: canDropPrivileges() fails closed on Linux,
 # so in an image without this user *every* job is refused with "no `coach` user exists in this
@@ -57,7 +57,7 @@ RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 
 # Every module server.js imports from the api root has to be named here: the image carries nothing
 # else, and one that is missing only shows at boot, as ERR_MODULE_NOT_FOUND.
-COPY server.js push-messages.js nudge.js nudge-copy.js verify-error.js password.js email-reset.js setup-password.js rate-limit.js passkeys-store.js device-link.js media.js queue.js sync-stamps.js durable.js admin-socket.js recover.js ./
+COPY server.js push-messages.js nudge.js nudge-copy.js origin-hint.js password.js email-reset.js setup-password.js rate-limit.js media.js queue.js sync-stamps.js durable.js admin-socket.js ./
 COPY shared ./shared
 COPY coach ./coach
 ENV NODE_ENV=production

@@ -1,22 +1,10 @@
-// Backend + WebAuthn helpers (ported from the vanilla app).
+// Backend request helpers.
 import { t } from './i18n-core.js'
 import { MOBILE } from './mobile.js'
 import { appBase } from './app-base.js'
 import { nativeFetch } from './capacitor-fetch.js'
 
-export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
-export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint or face unlock' : 'your fingerprint, face or PIN'
-// The same phrase in the UI language. It goes into translated sentences ("confirm with {0}"),
-// so the English constant above left an English phrase in the middle of every other language.
-// Functions, not constants: the pack is loaded after this module is.
-export const bio = () => (IS_APPLE ? t('Face ID / Touch ID') : IS_ANDROID ? t('fingerprint or face unlock') : t('your fingerprint, face or PIN'))
-// PublicKeyCredential is the WebAuthn-specific capability signal. Do not also gate the UI on
-// navigator.credentials: some browsers expose WebAuthn while that generic Credential Management
-// API check produces a false negative (notably Chrome on iOS). The real create/get calls still run
-// only after the user chooses a passkey action and surface any genuine browser error there.
-export const webauthnOK = () => typeof window.PublicKeyCredential !== 'undefined'
-
 // The paired mobile app (lib/remote.js) is the only caller of these — everywhere else stays on
 // same-origin cookies, so remoteBase/remoteToken stay empty and api() behaves exactly as before.
 let remoteBase = ''
@@ -49,11 +37,10 @@ const TIMEOUT_MS = 60000
 
 const failure = (message, code, status) => Object.assign(new Error(message), { code, status })
 // The message an error answer is shown with. The server's English `error`, except a write the
-// origin check refused (or a passkey made at another address): a self-hoster whose ORIGIN is not
 // the address they opened only ever saw "cross-origin request refused", and nobody could tell
 // what to change. The answer names ORIGIN, so the sentence can too (api/verify-error.js).
 function refusal(status, body) {
-  if (body && body.code === 'origin-mismatch') return t('This server only takes changes made at {0}. If you opened openGym at another address, whoever runs the server can set ORIGIN and RP_ID to match it (the self-hosting guide shows how).', String(body.expected || '?'))
+  if (body && body.code === 'origin-mismatch') return t('This server only takes changes made at {0}. If you opened openGym at another address, set ORIGIN to match it.', String(body.expected || '?'))
   return (body && body.error) || ('HTTP ' + status)
 }
 
@@ -341,84 +328,6 @@ export async function pairRedeem(serverBase, code, { probeMs = PROBE_MS } = {}) 
   return data
 }
 
-const bufToB64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-const b64uToBuf = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)).buffer
-
-function toCreationOptions(o) {
-  o.challenge = b64uToBuf(o.challenge)
-  o.user.id = b64uToBuf(o.user.id)
-  ;(o.excludeCredentials || []).forEach(c => { c.id = b64uToBuf(c.id) })
-  return o
-}
-function toRequestOptions(o) {
-  o.challenge = b64uToBuf(o.challenge)
-  ;(o.allowCredentials || []).forEach(c => { c.id = b64uToBuf(c.id) })
-  return o
-}
-function credToJSON(cred) {
-  const r = cred.response
-  const out = {
-    id: cred.id, rawId: bufToB64u(cred.rawId), type: cred.type,
-    clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
-    authenticatorAttachment: cred.authenticatorAttachment || null,
-    response: { clientDataJSON: bufToB64u(r.clientDataJSON) }
-  }
-  if (r.attestationObject) {
-    out.response.attestationObject = bufToB64u(r.attestationObject)
-    out.response.transports = r.getTransports ? r.getTransports() : ['internal']
-  }
-  if (r.authenticatorData) {
-    out.response.authenticatorData = bufToB64u(r.authenticatorData)
-    out.response.signature = bufToB64u(r.signature)
-    out.response.userHandle = r.userHandle ? bufToB64u(r.userHandle) : null
-  }
-  return out
-}
-// A passkey sign-in or sign-up the server refused, in the UI language. The routes send a stable
-// `code` beside their English message; an answer without one (an older server, a verify error)
-// is shown as it came.
-export function passkeyError(e, fallback) {
-  switch (e?.data?.code) {
-    case 'invite': return t('That invite code is not valid.')
-    case 'unknown-credential': return t('This server doesn’t know that passkey. Make a profile first.')
-    case 'disabled': return t('This account has been disabled.')
-    case 'challenge-expired': return t('That took a little too long. Give it another go.')
-    case 'origin-mismatch': return refusal(e.status, e.data)
-  }
-  return e?.message || fallback
-}
-export async function passkeyRegister(name, code) {
-  const { cid, options } = await api('/api/register/options', { method: 'POST', body: JSON.stringify({ name, code: code || '' }) })
-  const cred = await navigator.credentials.create({ publicKey: toCreationOptions(options) })
-  const res = await api('/api/register/verify', { method: 'POST', body: JSON.stringify({ cid, credential: credToJSON(cred) }) })
-  return res.user
-}
-// One passkey ceremony, not yet sent anywhere: /api/login/verify turns it into a sign-in, and
-// the account routes take it as proof that the owner is here (#118, #95). `signal` calls the
-// prompt off — a sheet that asked for it and was closed meanwhile (components/PasswordAuth.jsx,
-// ProveOwner) — which then rejects with an AbortError.
-export async function passkeyAssertion({ signal } = {}) {
-  const { cid, options } = await api('/api/login/options', { method: 'POST', body: '{}' })
-  const cred = await navigator.credentials.get({ publicKey: toRequestOptions(options), ...(signal ? { signal } : {}) })
-  return { cid, credential: credToJSON(cred) }
-}
-export async function passkeyLogin() {
-  const res = await api('/api/login/verify', { method: 'POST', body: JSON.stringify(await passkeyAssertion()) })
-  return res.user
-}
-// A creation ceremony on options the server has already handed out: another passkey for a
-// signed-in profile, or one made with a code from another device (#95, components/Passkeys.jsx).
-// The options come in an earlier step so the prompt opens straight from the tap that asks for it.
-// They are copied first — the conversion writes buffers into them, and a prompt dismissed by
-// mistake is tried again with the same ones.
-export async function createPasskey(options) {
-  const cred = await navigator.credentials.create({ publicKey: toCreationOptions(JSON.parse(JSON.stringify(options))) })
-  return credToJSON(cred)
-}
-
-// Name-and-password sign-in, on an instance that offers it (config.password_login). Each of
-// these answers with the same session cookie a passkey sign-in sets, so callers treat the user
-// they return exactly alike.
 const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) })
 // `name` is whatever was typed in "Name or e-mail": it goes in the original `name` field, which
 // the server matches against the profile's sign-in e-mail when it holds an "@" and against the

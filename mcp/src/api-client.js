@@ -8,7 +8,7 @@
    The credential is a paired session (scripts/pair.mjs): the same token the phone app holds,
    good for SESSION_DAYS and revoked by "Sign out everywhere". It is a full sign-in to the
    profile, so it only ever travels over https — plain http to this machine aside, the exception
-   passkeys make too — and it is never put into a result or an error message. */
+   browser sessions make too — and it is never put into a result or an error message. */
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 // What a session token is made of (api/server.js makeSession: `uid:exp:ver` and a base64url MAC).

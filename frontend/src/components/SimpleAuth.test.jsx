@@ -32,10 +32,17 @@ afterEach(() => act(() => { root.unmount(); host.remove() }))
 it('offers only simple sign-in and signs into the named profile', async () => {
   mount(); expect(host.querySelector('[autocomplete="username"]')).toBeTruthy(); expect(host.querySelector('[autocomplete="current-password"]')).toBeTruthy()
   expect(button('Forgot password?')).toBeTruthy()
-  expect(button('Create account')).toBeUndefined()
-  expect(host.textContent).not.toMatch(/passkey|QR|other device|reset code/i)
+  expect(button('Create account')).toBeTruthy()
+  expect(host.textContent).not.toMatch(/passkey|QR|other device/i)
   type('username', 'oran'); type('password', 'my sufficiently long password'); await submit()
   expect(m.user).toEqual({ id: 'u1', name: 'oran' }); expect(m.calls[0].body.name).toBe('oran')
+})
+it('opens account creation from sign-in and can return to sign-in', () => {
+  mount(); act(() => button('Create account').click())
+  expect(host.querySelector('[name="email"]')).toBeTruthy()
+  expect(host.querySelector('[name="confirm-password"]')).toBeTruthy()
+  act(() => button('Back to sign in').click())
+  expect(host.querySelector('[name="confirm-password"]')).toBeNull()
 })
 it('sends a reset request and acknowledges it without claiming an account exists', async () => {
   mount(); act(() => button('Forgot password?').click()); type('email', 'oran@example.com'); await submit()
@@ -83,5 +90,5 @@ it('sensitive account actions offer current-password confirmation without passke
 it('re-authentication after sync expires opens the simple flow without legacy recovery choices', () => {
   signInAgain(); act(() => root.render(m.sheets[0](() => {})))
   expect(host.querySelector('[autocomplete="username"]')).toBeTruthy()
-  expect(host.textContent).not.toMatch(/passkey|reset code|other device/i)
+  expect(host.textContent).not.toMatch(/passkey|other device/i)
 })

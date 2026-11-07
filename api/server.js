@@ -1,4 +1,4 @@
-/* opengym-api — passkey (WebAuthn) auth + per-user state storage for openGym
+/* opengym-api — password auth + per-user state storage for openGym
    No framework, JSON-file storage, signed session cookies.               */
 import http from 'node:http';
 import crypto from 'node:crypto';
@@ -8,10 +8,6 @@ import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
 import { pipeline } from 'node:stream/promises';
-import {
-  generateRegistrationOptions, verifyRegistrationResponse,
-  generateAuthenticationOptions, verifyAuthenticationResponse
-} from '@simplewebauthn/server';
 import webpush from 'web-push';
 import * as coachConfig from './coach/config.js';
 import * as coachJobs from './coach/jobs.js';
@@ -19,18 +15,13 @@ import { coachRoutes } from './coach/routes.js';
 import { startCadence } from './coach/cadence.js';
 import { startWarmup } from './coach/warmup.js';
 import { dayReminderPush, nudgePush, restTimerPush, testPush } from './push-messages.js';
-import { verifyError, isMisconfigured, originHint } from './verify-error.js';
+import { originHint } from './origin-hint.js';
 import {
   hashPassword, verifyPassword, needsRehash, passwordProblem, passwordLength, nameKey, BusyError,
   MIN_LENGTH, MAX_LENGTH, makeResetCode, hashResetCode, resetCodeMatches, RESET_TTL_MS, warmUp,
   normalizeEmail, maskEmail
 } from './password.js';
 import { createBackoff, createWindow } from './rate-limit.js';
-import {
-  listPasskeys, addPasskeyRecord, renamePasskeyRecord, removePasskeyRecord, passkeyRemovalRefused, MAX_PASSKEYS,
-  transportsOf,
-} from './passkeys-store.js';
-import { createDeviceLink, findDeviceLink, burnDeviceLink, dropDeviceLinks, recoveryLinkOf, RECOVERY_TTL_MS } from './device-link.js';
 import { startAdminSocket } from './admin-socket.js';
 import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE } from './media.js';
 import { effectiveRoutineId } from './queue.js';
@@ -41,9 +32,7 @@ import { createEmailReset } from './email-reset.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
-const RP_ID = process.env.RP_ID || 'localhost';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
-const RP_NAME = process.env.RP_NAME || 'Open Gym Oran';
 // Admin dashboard (issue): admins are matched by uid (or the admin flag FIRST_USER_ADMIN sets);
 // INVITE_ONLY gates new signups behind a code the admin generates. Off by default, so a fresh
 // self-hosted instance stays open.
@@ -70,11 +59,6 @@ function claimFirstAdmin(req, user) {
 // out of is still the wrong front door (#42). Default ON, so existing instances are unchanged;
 // the polarity is inverted from INVITE_ONLY because the safe default here is the permissive one.
 const ALLOW_GUEST = !/^(0|false|no|off)$/i.test(process.env.ALLOW_GUEST || '');
-// Name-and-password sign-in next to passkeys (#118). Off by default: it adds a second way into
-// every account that opts in, so an instance has to ask for it. While it is off every password
-// route answers 404 and the app shows none of it; hashes already stored stay where they are.
-const PASSWORD_LOGIN = /^(1|true|yes|on)$/i.test(process.env.PASSWORD_LOGIN || '');
-const SIMPLE_LOGIN = PASSWORD_LOGIN && /^(1|true|yes|on)$/i.test(process.env.SIMPLE_LOGIN || '');
 // The language the sign-in screen, and every profile that never picked one, starts in (#303) —
 // for an instance whose people share a language. Only a tag's shape is checked here; the app
 // matches it against the languages it has and ignores one it does not know. Unset, it is left
@@ -117,8 +101,7 @@ if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(
 const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
 
 const dbFile = path.join(DATA, 'db.json');
-// Every account, passkey and invite. Only a missing file starts empty: an unreadable one (a write
-// cut short by a power loss, a damaged restore) used to boot with no users at all, and the first
+// A damaged database (including a write cut short by a power loss) used to boot with no users at all, and the first
 // save then replaced it — every profile locked out, every training history orphaned, and with
 // FIRST_USER_ADMIN the first visitor made admin. Now the damaged file is kept aside and the copy
 // saveDb keeps of each version it writes (db.json.bak) is used; with neither readable the server
@@ -126,7 +109,7 @@ const dbFile = path.join(DATA, 'db.json');
 function loadDb() {
   let raw;
   try { raw = fs.readFileSync(dbFile, 'utf8'); }
-  catch (e) { if (e.code === 'ENOENT') return { users: [], creds: [], subs: [], invites: [] }; throw e; }
+  catch (e) { if (e.code === 'ENOENT') return { users: [], subs: [], invites: [] }; throw e; }
   const parse = text => { const v = JSON.parse(text); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object'); return v; };
   try { return parse(raw); } catch (err) {
     const aside = `${dbFile}.unreadable-${Date.now()}`;
@@ -143,11 +126,12 @@ function loadDb() {
   }
 }
 let db = loadDb();
+// Drop data from the retired authentication scheme when this database is next saved.
+delete db.creds;
+delete db.deviceLinks;
 db.users = db.users || [];
-db.creds = db.creds || [];
 db.subs = db.subs || [];
 db.invites = db.invites || [];
-db.deviceLinks = db.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
 // One owner per instance, any number of admins. Admins run the place day to day (users, invites,
 // the Coach); the owner is the one admin the others cannot act on: only the owner appoints or
@@ -165,8 +149,7 @@ function ownerId() {
   return db.users.find(isAdmin)?.id || null;
 }
 const isOwner = user => !!user && isAdmin(user) && user.id === ownerId();
-// 0600: db.json holds passkey credential material. It used to be covered by a blanket 0700 on
-// the whole directory; now that the directory stays traversable, the file carries its own mode.
+// Keep the database private while leaving its directory traversable.
 // Once the new version is on disk, a second copy of it goes to db.json.bak, the same durable
 // way: loadDb falls back to it. A copy of the version being replaced, as it used to be, lost
 // whatever the last save wrote (a profile just created) when db.json was later found unreadable.
@@ -718,51 +701,15 @@ const clearCookie = COOKIE === LEGACY_COOKIE
   : [expireCookie(COOKIE), expireCookie(LEGACY_COOKIE)];
 
 /* ---------- CSRF ---------- */
-// SameSite=Lax keeps the session cookie off a genuinely cross-*site* request. It does not keep it
-// off a *sibling subdomain*: gym.example.com and anything-else.example.com are the same site, and
-// that is the ordinary self-hosting layout — one domain, one reverse proxy, several apps. Nothing
-// else in a request was being checked either; readBody() JSON.parse's the body whatever the
-// Content-Type claims, so a hostile page could reach the state-changing routes with a form-style
-// POST that needs no CORS preflight at all.
-//
-// So a state-changing request that came from a browser has to come from ORIGIN, the passkey
-// routes included. They used to be exempt on the grounds that the challenge id is a credential,
-// but it is the attacker's credential: /api/login/options hands a `cid` to anyone, the challenge
-// is bound to nothing else, and the attacker's own passkey can sign it — so a form on another site
-// could complete their sign-in in the victim's browser, and the Set-Cookie on that response
-// replaced the victim's session with one for the attacker's account. No legitimate caller is
-// cross-origin: a passkey only verifies against ORIGIN, so the mobile WebView could never use
-// these routes anyway.
-//
-// pair/redeem is the one exemption, and it has to be: the paired app calls it from its own
-// WebView origin, which is never ORIGIN. It is not a hole. The pairing code in the body is the
-// credential, and the answer sets no cookie: the token comes back in the body, which a
-// cross-site form or a no-cors fetch cannot read.
-//
-// The password routes are deliberately NOT exempt. A name and a password are a credential too,
-// but one a hostile page can know — its own — so an exempt POST /api/login/password would let
-// any site sign a visitor into the attacker's account and collect what they log (login CSRF).
+// Browser writes must come from ORIGIN. The paired phone redeems a short code
+// from its own origin and receives a Bearer token in the response body.
 const CSRF_EXEMPT = new Set(['POST /api/pair/redeem']);
-// The routes that answer to the credential in the body and never to a Bearer. No Bearer is the
-// credential that acts there, so none buys the shortcut below: any valid token would do, the
-// attacker's own included.
-const PASSKEY_ROUTES = new Set([
-  'POST /api/register/options', 'POST /api/register/verify',
-  'POST /api/login/options', 'POST /api/login/verify'
-]);
-// The other ways in are the same kind of route: the name and password, the reset code or the
-// device code in the body is the credential, never a Bearer.
+// These routes act on credentials in the body, so a Bearer does not bypass the
+// browser origin check for them.
 const SIGN_IN_ROUTES = new Set([
   'POST /api/login/password', 'POST /api/register/password', 'POST /api/login/password-reset',
-  'POST /api/login/forgot-password', 'POST /api/login/reset-password',
-  'POST /api/device-link/options', 'POST /api/device-link/verify'
+  'POST /api/login/forgot-password', 'POST /api/login/reset-password'
 ]);
-// A verify error as the answer's body: a passkey made at an address that is not ORIGIN/RP_ID gets
-// the same `code` as the origin check's 403, so the app explains both alike.
-const verifyAnswer = e => ({
-  error: verifyError(e, { rpId: RP_ID, origin: ORIGIN }),
-  ...(isMisconfigured(e) ? { code: 'origin-mismatch', expected: ORIGIN } : {})
-});
 const originsMatch = (a, b) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 // Whether a Bearer is the credential that would act on this request: it verifies, and no session
 // cookie sits beside it (readSession takes the cookie first, so a cookie is what would act then).
@@ -781,7 +728,7 @@ function csrfOk(req, key) {
   // readSession acted on the session cookie next to it — safe only because the CORS preflight
   // never allows credentials. And it buys nothing on the sign-in routes, where the body carries
   // the credential and a Bearer never is.
-  if (!PASSKEY_ROUTES.has(key) && !SIGN_IN_ROUTES.has(key) && bearerAuthenticates(req)) return true;
+  if (!SIGN_IN_ROUTES.has(key) && bearerAuthenticates(req)) return true;
   // Sec-Fetch-Site is set by the browser itself and no page can forge it, and it states exactly
   // the property wanted here — more precisely than comparing origins can. 'same-origin' is the
   // app talking to its own backend; a hostile page reports 'cross-site'; a sibling subdomain,
@@ -798,37 +745,7 @@ function csrfOk(req, key) {
   return originsMatch(origin, ORIGIN);
 }
 
-/* ---------- challenge store (in-memory, 5 min TTL) ---------- */
-// Every challenge says which ceremony it was handed out for (`kind`), and every route that takes
-// one back accepts only its own kind. Four ceremonies share this store — signing up, signing in,
-// adding a passkey in Settings and redeeming a device link (#95) — and the last two carry a `uid`
-// exactly like a sign-up's. When /api/register/verify asked only for a uid, the challenge that
-// POST /api/device-link/options hands to anyone holding a code finished a *sign-up* instead: a
-// passkey on the owner's profile and a session for it, without using the code up, as often as
-// wanted, and past "sign out everywhere".
-const challenges = new Map(); // cid -> {kind, challenge, name?, uid?, exp}
-// POST /api/login/options is anonymous and unthrottled, and every call leaves a challenge here
-// for five minutes, so the Map has a ceiling: past it the oldest goes. A ceremony takes seconds,
-// so only a flood far beyond any real sign-in traffic reaches back far enough to cost one.
-const MAX_CHALLENGES = 20000;
-function putChallenge(data) {
-  while (challenges.size >= MAX_CHALLENGES) challenges.delete(challenges.keys().next().value);
-  const cid = crypto.randomBytes(16).toString('base64url');
-  challenges.set(cid, { ...data, exp: Date.now() + 5 * 60000 });
-  return cid;
-}
-function takeChallenge(cid) {
-  const c = challenges.get(cid);
-  challenges.delete(cid);
-  if (!c || c.exp < Date.now()) return null;
-  return c;
-}
-setInterval(() => { for (const [k, v] of challenges) if (v.exp < Date.now()) challenges.delete(k); }, 60000).unref();
-
-// ---------- device pairing (mobile app "connect to my server", no WebAuthn ceremony) ----------
-// A passkey ceremony can't run inside the app's WebView (its origin never matches RP_ID), so the
-// app authenticates by redeeming a short code minted from an already signed-in browser tab —
-// same 5-min-TTL/one-shot shape as the WebAuthn challenge store above.
+// A browser signed in to the account mints a short code for the mobile app.
 const pairings = new Map(); // code -> {uid, exp}
 const PAIR_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — read off a screen
 function makePairCode() {
@@ -880,7 +797,6 @@ function readBody(req) {
       if (!chunks.length) return resolve({});
       // A body has to say it is JSON. The three types a form can send, and the ones a no-cors
       // fetch can send, are exactly the ones that need no CORS preflight; parsing them anyway
-      // let another site's form reach any route that reads a body, and on the passkey sign-in
       // that meant setting the victim's session to an account the attacker holds. Every client
       // in the tree already sends application/json (lib/api.js, sw.js).
       if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] || '')) {
@@ -1014,7 +930,6 @@ function audit(req, ev, f = {}) {
   }
   if (f.target) { rec.tgt = f.target.id; rec.tname = String(f.target.name || '').slice(0, 40); }
   if (f.msg) rec.msg = String(f.msg).slice(0, 120);
-  // What a failed proof of ownership was guarding (proveOwner): 'email', 'passkey-add', …
   if (f.act) rec.act = String(f.act).slice(0, 40);
   const ip = clientIp(req);
   if (ip) rec.ip = ip;
@@ -1029,43 +944,8 @@ if (AUDIT_ON) {
 }
 
 /* ---------- sign-in throttle ---------- */
-// The password routes are counted (rate-limit.js) — only on an instance with PASSWORD_LOGIN on,
-// since none of them exists otherwise — and so are the two that redeem a device link (#95).
-// Passkey sign-in, passkey registration and phone pairing stay out of it, as they always were:
-// nothing there is worth guessing (an assertion is a signature, an invite code 64 random bits, a
-// pairing code 40 bits that live five minutes, one per profile), and behind a proxy that hands the
-// API one address for every visitor a per-address count on them would let one stranger pause
-// everybody's way in. Their failures are still written to the audit log, but only a few per
-// address a minute (auditFail below), so a flood of junk cannot push everything else out of it. A
-// device-link code is 60 bits that live ten minutes, no more worth guessing than a pairing code,
-// but it is counted the way a reset code is: every wrong one is a guess at a way into somebody's
-// profile, and the pause it can start only ever stops link redemption, never a sign-in.
-// Three counts:
-//
-//   AUTH_BURST   every request to a counted route, 60 a minute per address. Enough for a
-//                household behind one proxy; not enough to run scrypt as fast as one client
-//                can ask.
-//   ADDR_FAILS   wrong answers per address and per kind (a password or reset code, an invite
-//                code on password signup, a device-link code): 20 free, then a pause of 30 s
-//                that doubles up to 15 min.
-//   ACCOUNT_FAILS  wrong passwords per *account*, whoever sends them: 5 free, then 1 min
-//                doubling up to 1 h, forgotten after a day without one or on the next success.
-//                This is the one that protects a password — an address is cheap to change, an
-//                account is not. It is keyed by the account the name or e-mail resolves to
-//                (`acct:<id>`), so typing the e-mail after the name was paused meets the same
-//                pause; an identifier that resolves to nobody is counted as typed (`id:<fold>`),
-//                so a pause looks the same whether an account is there or not. The count of an
-//                account with a password is never evicted to make room for others. Passkeys
-//                are never paused by it.
-//
-// A password check is counted against the name and the address the moment it starts, not when
-// its answer comes back (passwordAttempt below): scrypt takes a tenth of a second, and counting
-// afterwards let a burst sent at once be checked in full under a single allowance.
-//
-// Behind a proxy every request can come from the same address (the bundled web container passes
-// the real one on; a second proxy in front of it may not). Then the per-address counts act for
-// the whole instance: one client can pause *password* sign-in for everybody for a while, and the
-// per-name pause is what still protects each password.
+// Bound password and account recovery attempts by address and account. A short
+// burst window also limits work before password verification starts.
 const AUTH_BURST = createWindow({ max: 60, windowMs: 60000 });
 const ADDR_FAILS = createBackoff({ free: 20, baseMs: 30000, maxMs: 15 * 60000, forgetMs: 3600000 });
 const ACCOUNT_FAILS = createBackoff({
@@ -1084,17 +964,13 @@ const THROTTLED = {
   'POST /api/login/forgot-password': 'email', 'POST /api/login/reset-password': 'password',
   'POST /api/login/password': 'password', 'POST /api/login/password-reset': 'password',
   'POST /api/register/password': 'signup',
-  'POST /api/account/password': 'password', 'DELETE /api/account/password': null,
+  'POST /api/account/password': 'password',
   // Setting an e-mail only spends the budget and asks the address's e-mail pause; an address
   // already in use counts against it (see POST /api/account/email).
   'POST /api/account/email': 'email', 'DELETE /api/account/email': null,
-  // Redeeming a device link (#95). Adding or removing a passkey and making a link only spend the
   // budget: the password that may prove them counts its own failures (passwordAttempt).
-  'POST /api/device-link/options': 'link', 'POST /api/device-link/verify': 'link',
-  'POST /api/account/passkeys/options': null, 'POST /api/account/device-link': null,
   // Pairing a phone: the same, for the password that may prove it.
   'POST /api/pair/create': null,
-  'DELETE /api/account/passkeys': null,
   // Deleting the account: the same, for the password that may prove it.
   'POST /api/account/delete': null
 };
@@ -1139,7 +1015,6 @@ function strikeAddress(req, kind) {
   if (lock) audit(req, 'auth.throttled', { ok: false, msg: kind });
 }
 
-// A failure on a route anyone can call without a session (passkey sign-in and sign-up, pairing)
 // is audited like any other, but only the first few per address and event a minute, and only so
 // many from everybody together. The log keeps the newest AUDIT_MAX rows, so without this a few
 // thousand junk requests (no Origin needed: these routes are CSRF-exempt) pushed every sign-in,
@@ -1153,29 +1028,13 @@ function auditFail(req, ev, f) {
   audit(req, ev, f);
 }
 
-/* ---------- password sign-in (#118) ---------- */
-// Optional, per instance (PASSWORD_LOGIN) and per profile: nobody has a password until they set
-// one. Passkeys stay the default and the recommended way in. What a password needs that a
-// passkey does not — hashing, a policy, the throttle above, a reset an admin can hand out — lives
-// in password.js and rate-limit.js; the routes are here because they share the session, invite
-// and audit machinery of the passkey routes.
-//
-// The name someone signs in with is their profile name, compared the way nameKey() folds it.
-// Profile names were never unique, so the rule is narrower than that: no two profiles *with a
-// password* may share a name. Setting one is refused while the name is taken that way, which is
-// also re-checked after every await, where another request could have taken it meanwhile.
-//
-// An unused reset code holds its profile's name too. The reset has already removed the old
-// password, and a name another profile took in the meantime would make the code impossible to
-// redeem — there is no rename — and leave that profile locked out. Sign-in itself only ever
-// looks at profiles that have a password (passwordHolder).
+/* ---------- password sign-in ---------- */
+// Account names are reserved across all profiles. A legacy profile without a
+// password can receive a setup email without another user taking its name.
 const hasPassword = u => !!(u && u.pw && typeof u.pw.h === 'string');
-// A password that counts for anything: one the instance still lets people sign in with. With
 // PASSWORD_LOGIN off, a password kept from when it was on neither signs in nor proves anything
-// (proveOwner), and does not keep a profile's last passkey in place.
-const passwordWayIn = u => PASSWORD_LOGIN && hasPassword(u);
 const passwordHolder = k => db.users.find(u => hasPassword(u) && nameKey(u.name) === k) || null;
-const holdsName = u => hasPassword(u) || !!(u.pwReset && u.pwReset.exp > Date.now());
+const holdsName = u => !!u;
 // An e-mail is a second name to sign in with (see "e-mail as a sign-in name" below), so a name
 // is also taken by another profile's e-mail — only ever relevant for a name with an "@" in it.
 const nameTaken = (name, exceptId) => {
@@ -1183,35 +1042,9 @@ const nameTaken = (name, exceptId) => {
   return db.users.some(u => u.id !== exceptId && ((holdsName(u) && nameKey(u.name) === k) || u.email === k));
 };
 
-/* ---------- e-mail as a sign-in name ----------
-   Optional, per profile, and only while PASSWORD_LOGIN is on: an address someone may type at the
-   password sign-in instead of their profile name. Nothing is ever sent to it — no verification,
-   no reset mail; resets stay the admin's one-time code — so the address is never proven to be
-   theirs, and it does not need to be: it is only an identifier that points at an account, and the
-   password is still what opens it. Stored as `u.email`, folded by normalizeEmail() (password.js).
-
-   It is unique across every profile, and no profile's address may be another password-holding
-   profile's name (nameTaken above says the same the other way round), so an identifier never
-   points at two accounts. That uniqueness is the one thing an address reveals: setting one that
-   is in use answers 409. The route could be made to hide it — accept the address silently and
-   leave it pointing nowhere — but then someone who typed their own address on a second profile
-   would be told it was saved and find it did not sign in, which is worse. So it answers, and the
-   answer is made expensive instead: in Settings only a signed-in owner can ask (session +
-   proveOwner, a passkey prompt or a checked password per try), an address already in use counts
-   against the caller's address and account (20 free, then 30 s doubling to 15 min), and profile
-   creation with a password and an address counts the same way against the caller's address.
-   Signup needs no session, so it is the cheaper place to ask: it answers only after hashing the
-   new password and, on an invite-only instance, only to someone holding a valid invite code
-   (a refusal does not use it up); an open instance answers anyone. What that leaves is what the name-taken answer already gives
-   away for names — "some profile here uses this", never which one — at a few tries an hour.
-
-   Sign-in takes it in the same field as the name (loginTarget): an identifier with an "@" is
-   looked up as an address first, then as a name, so a profile name that happens to contain an
-   "@" still signs in. Wrong passwords count against the account the identifier resolves to, so
-   switching between name and address does not reset the pause. The full address is never
-   written to the audit log or the console (maskEmail), is not part of /api/me, the Coach, the
-   MCP bridge or anything shared, and only its owner (GET /api/account/password) and an admin
-   (the user list) ever see it. */
+/* ---------- e-mail as a sign-in name ---------- */
+// An account may also sign in with its recovery email. Addresses and account
+// names are unique across profiles; changes require the current password.
 const emailHolder = e => db.users.find(u => hasPassword(u) && u.email === e) || null;
 const emailTaken = (e, exceptId) => db.users.some(u => u.id !== exceptId && (u.email === e || (holdsName(u) && nameKey(u.name) === e)));
 const EMAIL_ERRORS = {
@@ -1231,7 +1064,6 @@ function loginTarget(body) {
   return { k, user, resolve, email: k.includes('@'), key: user ? acctKey(user) : 'id:' + k };
 }
 const acctKey = u => 'acct:' + u.id;
-const passkeyCount = u => db.creds.filter(c => c.userId === u.id).length;
 const publicUser = u => ({ id: u.id, name: u.name, admin: isAdmin(u), ...(isOwner(u) ? { owner: true } : {}) });
 const POLICY_ERRORS = {
   'too-short': `the password needs at least ${MIN_LENGTH} characters`,
@@ -1241,8 +1073,7 @@ const POLICY_ERRORS = {
 const policyError = (res, problem) => json(res, 400, { error: POLICY_ERRORS[problem], code: problem });
 const WRONG = { error: 'wrong name or password', code: 'bad-credentials' };
 
-// A new password ends every other session of the account, the way "sign out everywhere" does,
-// pending pairing codes and device links included; the caller's own is re-issued by the route.
+// A new password ends other sessions and pending pairing codes.
 // Always a new record, never an edit of the old one: a check still running against the old one
 // tells the two apart by that (see POST /api/login/password).
 function setPassword(user, h) {
@@ -1251,34 +1082,11 @@ function setPassword(user, h) {
   invalidateEmailReset(user);
   user.sv = sessionVersion(user) + 1;
   for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
-  dropDeviceLinks(db, user.id);
 }
 
 function invalidateEmailReset(user) {
   user.resetVersion = (user.resetVersion || 0) + 1;
   delete user.emailReset;
-}
-
-// A passkey assertion made just now by the signed-in account itself — how someone who has no
-// password yet proves it is them before setting one. A session alone is not enough for that:
-// it may be a cookie someone walked off with, and a password would turn it into a way in that
-// outlives "sign out everywhere". Same ceremony as /api/login/verify, and the credential has
-// to belong to this account.
-async function passkeyStepUp(user, body) {
-  const c = takeChallenge(body.cid);
-  const cred = c?.kind === 'login' && db.creds.find(x => x.id === body.credential?.id && x.userId === user.id);
-  if (!cred) return false;
-  try {
-    const v = await verifyAuthenticationResponse({
-      response: body.credential, expectedChallenge: c.challenge, expectedOrigin: ORIGIN, expectedRPID: RP_ID,
-      requireUserVerification: false,
-      credential: { id: cred.id, publicKey: b64uToBuf(cred.publicKey), counter: cred.counter, transports: cred.transports }
-    });
-    if (!v.verified) return false;
-    cred.counter = v.authenticationInfo.newCounter;
-    cred.lastUsed = new Date().toISOString();
-    return true;
-  } catch { return false; }
 }
 
 // One password check against the account key `k` (loginTarget), counted as a failure for it and for the caller's
@@ -1315,34 +1123,10 @@ function passwordAttempt(req, res, k) {
   };
 }
 
-// Proof that whoever holds this session is the account's owner right now, for the changes that
-// add or take away a lasting way in — setting a password, adding a passkey, making a device link,
-// removing a passkey or the password. A session on its own is not enough for those: it may be a
-// cookie someone walked off with. An addition would outlive "sign out everywhere"; a removal
-// would let whoever holds the cookie choose which of the owner's ways in is left — an old
-// security key rather than the phone the owner carries — or take away the password that signs
-// them in where passkeys do not work.
-//
-// Either a passkey assertion made for this request (`cid` from /api/login/options, `credential`
-// signed by one of this account's passkeys), or the current password — only while the instance
-// offers password sign-in. With PASSWORD_LOGIN off, a password kept from when it was on is a
-// secret nothing else checks any more, possibly an old or reused one, so it proves nothing either:
-// a stolen cookie and a guessed password must not add a passkey on an instance that switched
-// passwords off. A profile that only ever had a password is moved onto a passkey while the flag
-// is still on (docs/SELF_HOSTING.md). Answers the refusal itself and returns null, or says which
-// proof it was ('passkey' | 'password'). Wrong passwords count toward the sign-in pause.
-// `act` names the change being confirmed ('email', 'password-set', 'passkey-remove', …): a failed
-// proof is logged as `auth.proof.fail` for that change, not as a failed sign-in — the owner was
-// signed in all along, and "Password sign-in failed" sent an admin looking for the wrong thing.
+// Confirm a sensitive account change with the current password.
 async function proveOwner(req, res, user, body, act) {
-  if (body.credential) {
-    if (await passkeyStepUp(user, body)) return 'passkey';
-    audit(req, 'auth.proof.fail', { ok: false, user, msg: 'step-up-failed', act });
-    json(res, 403, { error: 'the passkey could not be verified', code: 'passkey' });
-    return null;
-  }
-  if (!passwordWayIn(user)) {
-    json(res, 403, { error: 'confirm with your passkey first', code: 'passkey-required' });
+  if (!hasPassword(user)) {
+    json(res, 403, { error: 'set a password first', code: 'password-required' });
     return null;
   }
   const current = typeof body.current === 'string' ? body.current : '';
@@ -1364,7 +1148,7 @@ async function proveOwner(req, res, user, body, act) {
   return 'password';
 }
 
-if (PASSWORD_LOGIN) warmUp();
+warmUp();
 
 // Taking the address away: the profile then signs in by its name only. Asks the same proof as
 // setting one; a profile without an address gets 200 with none asked.
@@ -1380,14 +1164,13 @@ async function removeEmail(req, res, user, body) {
   json(res, 200, { ok: true, email: null });
 }
 
-// Everything of an account, gone for good: the user record, their passkeys, push subscriptions,
-// device links and live presence, and outside db.json their training history, any Coach
-// credential and their photos and videos. The admin's delete and the account's own both end here.
+// The final admin can leave only when no other profiles depend on the instance.
+const lastAdminLeaving = u => isAdmin(u) && db.users.length > 1 && db.users.filter(isAdmin).length <= 1;
+
+// Delete an account and its server-side state.
 function removeAccount(u) {
   db.users = db.users.filter(x => x.id !== u.id);
-  db.creds = (db.creds || []).filter(c => c.userId !== u.id);
   db.subs = (db.subs || []).filter(x => x.userId !== u.id);
-  dropDeviceLinks(db, u.id);
   presence.delete(u.id);
   // The training history and any Coach credential of theirs, both outside db.json.
   try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
@@ -1457,8 +1240,7 @@ const passwordRoutes = {
     json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
 
-  // For browsers that cannot make a passkey at all: plain http on a LAN address, some Firefox
-  // setups. Same invite rules as /api/register/*, checked again and burned after the hash.
+  // Create a password account. Check invite rules again after hashing.
   'POST /api/register/password': async (req, res) => {
     const body = await readBody(req);
     const name = text(body.name).trim().slice(0, 40);
@@ -1481,14 +1263,13 @@ const passwordRoutes = {
     const nameIsAddress = name.includes('@');
     if (nameIsAddress && addressPaused(req, res, 'email')) return;
     if (!nameIsAddress && nameTaken(name)) return taken();
-    // An e-mail is optional here. One already in use counts against the address, the way it
+    // A recovery e-mail is required. One already in use counts against the address, the way it
     // does in Settings: this route needs no session, so it is the cheaper place to ask. Whether
     // it is in use is only answered after the hash and the invite check that follows it, so on
     // an invite-only instance nobody without a valid code learns anything about addresses.
     const hasEmail = typeof body.email === 'string' && body.email.trim() !== '';
     const email = hasEmail ? normalizeEmail(body.email) : null;
-    if (SIMPLE_LOGIN && !email) return json(res, 400, EMAIL_ERRORS.invalid);
-    if (hasEmail && !email) return json(res, 400, EMAIL_ERRORS.invalid);
+    if (!email) return json(res, 400, EMAIL_ERRORS.invalid);
     const emailRefused = () => {
       strikeAddress(req, 'email');
       audit(req, 'auth.register.fail', { ok: false, name, msg: 'email-taken' });
@@ -1526,15 +1307,15 @@ const passwordRoutes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     json(res, 200, {
-      set: hasPassword(user), setAt: user.pw?.set || null, passkeys: passkeyCount(user),
+      set: hasPassword(user), setAt: user.pw?.set || null,
       name: user.name, nameTaken: nameTaken(user.name, user.id),
+      ...(lastAdminLeaving(user) ? { deleteBlocked: 'last-admin' } : {}),
       // Only the owner's own session is ever handed their address.
       email: user.email || null
     });
   },
 
-  // Set or change. Proof first: the current password when there is one, or a passkey assertion
-  // made for this request (which is also how a forgotten password is replaced by its owner).
+  // Changing the password requires the current password.
   'POST /api/account/password': async (req, res) => {
     const s = sessionOf(req);
     if (!s) return json(res, 401, { error: 'not signed in' });
@@ -1562,37 +1343,10 @@ const passwordRoutes = {
     json(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(user) });
   },
 
-  // Never the last way in: a profile with no passkey keeps its password, because nothing else
-  // could sign it in again. Same proof as setting one (proveOwner) — the password itself, or a
-  // passkey assertion made for this request — asked only once the removal could go ahead, so a
-  // refusal the profile's state already decides spends no passkey prompt and no password check.
-  // Existing sessions are left alone; "sign out everywhere" ends them.
-  'DELETE /api/account/password': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return json(res, 401, { error: 'not signed in' });
-    const body = await readBody(req);
-    const lastWayIn = () => json(res, 409, { error: 'the password is the only way into this profile', code: 'last-way-in' });
-    if (!hasPassword(user)) return json(res, 200, { ok: true });
-    if (!passkeyCount(user)) return lastWayIn();
-    const proof = await proveOwner(req, res, user, body, 'password-remove');
-    if (!proof) return;
-    // Everything above awaited: the session may have ended, and the profile's last passkey may
-    // have been removed by a request that ran alongside this one.
-    if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
-    if (proof === 'passkey') saveDb();   // the confirming passkey's counter and last use
-    if (!hasPassword(user)) return json(res, 200, { ok: true });
-    if (!passkeyCount(user)) return lastWayIn();
-    delete user.pw;
-    saveDb();
-    audit(req, 'auth.password.remove', { user });
-    json(res, 200, { ok: true });
-  },
-
   // Set, change (`email`) or remove (`email` empty or null, or DELETE) the address this profile
   // may sign in with. The same proof as a password (proveOwner): an address that points at the
   // account is part of how someone gets in, and a copied session must not choose it. An address
   // already in use is refused only after the proof, and counts against the caller's address and
-  // account, so asking whether an address is in use costs a passkey prompt or a password check
   // and runs out after a few tries (see "e-mail as a sign-in name" above).
   'POST /api/account/email': async (req, res) => {
     const s = sessionOf(req);
@@ -1615,7 +1369,6 @@ const passwordRoutes = {
     if (sessionOf(req)?.user !== user) return json(res, 401, { error: 'not signed in' });
     if (paused()) return;
     if (emailTaken(email, user.id)) {
-      if (proof === 'passkey') saveDb();   // the confirming passkey's counter and last use
       strikeAddress(req, 'email');
       ADDR_FAILS.fail(acct);
       audit(req, 'auth.email.fail', { ok: false, user, msg: 'email-taken' });
@@ -1637,7 +1390,6 @@ const passwordRoutes = {
   // An admin hands out a one-time code; the person redeems it below with a password of their
   // choosing. Issuing it ends the old password and every session of the account at once: a
   // reset is asked for when access is lost or in doubt, and a password someone else may know
-  // should not keep working for the day the code is valid. Passkeys are left alone. The code is
   // shown once and stored only as a hash. Admin accounts are refused, as they are by disable —
   // one admin must not be able to take over another's login.
   'POST /api/admin/user/password-reset': async (req, res) => {
@@ -1652,8 +1404,7 @@ const passwordRoutes = {
     u.pwReset = { h: hashResetCode(code), exp: Date.now() + RESET_TTL_MS, by: admin.id };
     u.sv = sessionVersion(u) + 1;
     for (const [k, v] of pairings) if (v.uid === u.id) pairings.delete(k);
-    dropDeviceLinks(db, u.id);
-    presence.delete(u.id);
+      presence.delete(u.id);
     saveDb();
     audit(req, 'admin.password.reset', { user: admin, target: u });
     json(res, 200, { ok: true, name: u.name, code, expires: u.pwReset.exp });
@@ -1694,281 +1445,6 @@ const passwordRoutes = {
     ACCOUNT_FAILS.clear(acctKey(user));
     saveDb();
     audit(req, 'auth.password.reset', { user });
-    json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
-  }
-};
-
-/* ---------- more than one passkey, and one-time device links (#95) ---------- */
-// A passkey lives where it was made — Windows Hello on one PC, one phone's keychain, one security
-// key — so a profile that only had the passkey it was created with could not be reached from a
-// second device, and "Create profile" there made a new, empty one. Two ways to add another:
-//
-//   Settings → Passkeys → Add: a registration ceremony in the signed-in browser, for any other
-//   authenticator it can reach — a security key, a password manager, a phone through the
-//   browser's own QR prompt.
-//
-//   A device link: the signed-in device shows a one-time code (device-link.js), and the other
-//   device redeems it by creating a passkey of its own, which is what then signs it in. The code
-//   never opens a session by itself: whoever redeems it leaves a passkey on the profile, listed
-//   in Settings where the owner sees it and can remove it.
-//
-// Either way the new passkey is a way into the profile that outlives "sign out everywhere", so
-// both ask for the proof a first password does (proveOwner). So does removing one: a stolen
-// cookie must not choose which of the owner's passkeys is left. Removing one never leaves a
-// profile without a way in: its last passkey stays unless a password can sign in instead.
-//
-// Sessions are not tied to the passkey that opened them — a session is `uid:expiry:version`,
-// nothing more — so removing a passkey stops it signing in again but does not end a session it
-// already opened. "Sign out everywhere" does that, and Settings says so where a passkey is removed.
-// The last admin may not delete their own profile while anyone else is on the instance: nobody
-// could run it from the app afterwards. Alone on it, they may go.
-const lastAdminLeaving = u => isAdmin(u) && db.users.length > 1 && db.users.filter(isAdmin).length <= 1;
-// Makes a recovery code for `target` (#584): a device link that lives a day and says who made it
-// (`by`: the admin, or null for the server's own command). Making it signs the profile out
-// everywhere, as a password reset does: it is asked for when the devices are lost, and a lost phone
-// should not stay signed in for the day the code is good. Pairing codes and device links go too.
-// Passkeys and the password are left alone; the person removes the lost device's passkey in
-// Settings once they are back. Saved and audited here, whoever asked.
-function issueRecovery(req, target, by) {
-  target.sv = sessionVersion(target) + 1;
-  for (const [k, v] of pairings) if (v.uid === target.id) pairings.delete(k);
-  dropDeviceLinks(db, target.id);
-  presence.delete(target.id);
-  const made = createDeviceLink(db, target.id, Date.now(), RECOVERY_TTL_MS, { kind: 'recovery', by: by ? by.id : 'server' });
-  saveDb();
-  audit(req, by ? 'admin.recovery.create' : 'server.recovery.create', { ...(by ? { user: by } : {}), target, msg: by ? null : 'recover.js' });
-  return made;
-}
-
-const passkeyState = u => {
-  const passkeys = listPasskeys(db, u.id);
-  // `password`: whether the password can confirm an addition or a removal (proveOwner) — only
-  // while password sign-in is on. `lastWayIn`: whether removing any one passkey would be refused.
-  return { passkeys, password: passwordWayIn(u), lastWayIn: passkeys.length + (passwordWayIn(u) ? 1 : 0) <= 1 };
-};
-const LIMIT = { error: `a profile can have at most ${MAX_PASSKEYS} passkeys`, code: 'passkey-limit' };
-const LINK_INVALID = { error: 'that code is wrong, used or expired', code: 'link-invalid' };
-const notSignedIn = res => json(res, 401, { error: 'not signed in' });
-
-// Creation options for another passkey of `user`. The user handle is the profile's id, exactly as
-// at sign-up, so an authenticator files the new passkey under the same account; the passkeys the
-// profile has already are excluded, so an authenticator that holds one of them says so instead of
-// making a second.
-const moreOptions = user => generateRegistrationOptions({
-  rpName: RP_NAME, rpID: RP_ID,
-  userID: Buffer.from(user.id), userName: user.name, userDisplayName: user.name,
-  attestationType: 'none',
-  authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
-  excludeCredentials: db.creds.filter(c => c.userId === user.id).map(c => ({ id: c.id, transports: c.transports || [] }))
-});
-
-// The second half of either ceremony: the new passkey as a db.creds row, or null once the
-// refusal has been answered and audited as `ev`.
-async function newPasskey(req, res, c, body, ev, user) {
-  let verification;
-  try {
-    verification = await verifyRegistrationResponse({
-      response: body.credential, expectedChallenge: c.challenge, expectedOrigin: ORIGIN, expectedRPID: RP_ID,
-      requireUserVerification: false
-    });
-  } catch (e) {
-    // e.message can echo attacker-supplied response fields, so only the reason code is kept.
-    audit(req, ev, { ok: false, user, msg: 'verify-error' });
-    json(res, 400, verifyAnswer(e));
-    return null;
-  }
-  if (!verification.verified) {
-    audit(req, ev, { ok: false, user, msg: 'not-verified' });
-    json(res, 400, { error: 'not verified' });
-    return null;
-  }
-  const { credential } = verification.registrationInfo;
-  return {
-    id: credential.id,
-    publicKey: Buffer.from(credential.publicKey).toString('base64url'),
-    counter: credential.counter || 0,
-    transports: body.credential?.response?.transports,
-    name: body.name
-  };
-}
-
-const passkeyRoutes = {
-  'GET /api/account/passkeys': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return notSignedIn(res);
-    // `deleteBlocked`: the profile's own delete would be refused before any proof is looked at,
-    // so the delete sheet says so up front instead of after a passkey or password prompt.
-    json(res, 200, { ...passkeyState(user), ...(lastAdminLeaving(user) ? { deleteBlocked: 'last-admin' } : {}) });
-  },
-
-  // Adding one from Settings, step one: the proof, then the options. The proof is spent here; the
-  // challenge that comes back is good for five minutes, for this profile, under this session
-  // version — "sign out everywhere" in between ends the ceremony with everything else.
-  'POST /api/account/passkeys/options': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return notSignedIn(res);
-    const body = await readBody(req);
-    if (passkeyCount(user) >= MAX_PASSKEYS) return json(res, 409, LIMIT);
-    const proof = await proveOwner(req, res, user, body, 'passkey-add');
-    if (!proof) return;
-    // Awaited: a sign-out everywhere, a disable or an admin reset may have ended this session.
-    if (readSession(req) !== user) return notSignedIn(res);
-    if (proof === 'passkey') saveDb();   // the confirming passkey's counter and last use
-    const options = await moreOptions(user);
-    const cid = putChallenge({ challenge: options.challenge, uid: user.id, kind: 'add', sv: sessionVersion(user), proof });
-    json(res, 200, { cid, options });
-  },
-
-  'POST /api/account/passkeys/verify': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return notSignedIn(res);
-    const body = await readBody(req);
-    const c = takeChallenge(text(body.cid));
-    if (!c || c.kind !== 'add' || c.uid !== user.id) {
-      audit(req, 'auth.passkey.fail', { ok: false, user, msg: 'challenge-expired' });
-      return json(res, 400, { error: 'challenge expired, try again', code: 'challenge-expired' });
-    }
-    const cred = await newPasskey(req, res, c, body, 'auth.passkey.fail', user);
-    if (!cred) return;
-    if (readSession(req) !== user || sessionVersion(user) !== c.sv) return notSignedIn(res);
-    const added = addPasskeyRecord(db, user.id, cred);
-    if (added.error) {
-      audit(req, 'auth.passkey.fail', { ok: false, user, msg: added.code });
-      return json(res, 409, { error: added.error, code: added.code });
-    }
-    saveDb();
-    audit(req, 'auth.passkey.add', { user, msg: c.proof });
-    json(res, 200, { ok: true, ...passkeyState(user) });
-  },
-
-  'POST /api/account/passkeys/rename': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return notSignedIn(res);
-    const body = await readBody(req);
-    const r = renamePasskeyRecord(db, user.id, text(body.id), body.name);
-    if (r.error) return json(res, 404, { error: r.error, code: r.code });
-    saveDb();
-    json(res, 200, { ok: true, ...passkeyState(user) });
-  },
-
-  // `?id=` — the credential id from the list; the body carries the same proof adding one takes
-  // (proveOwner), asked only once the removal could go ahead, so a refusal the list already
-  // decides spends no passkey prompt and no password check. The last one is never removed
-  // (removePasskeyRecord), checked again after the proof, since a request running alongside may
-  // have removed another passkey or the password meanwhile. An unused device code goes with it: a
-  // passkey is removed because it is lost or not trusted, and a code made with it just before — by
-  // whoever holds it — would otherwise add a fresh one right after.
-  'DELETE /api/account/passkeys': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return notSignedIn(res);
-    const id = new URL(req.url, 'http://x').searchParams.get('id') || '';
-    const body = await readBody(req);
-    const refuse = r => json(res, r.code === 'last-way-in' ? 409 : 404, { error: r.error, code: r.code });
-    const refused = passkeyRemovalRefused(db, user.id, id, passwordWayIn(user) ? 1 : 0);
-    if (refused) return refuse(refused);
-    const proof = await proveOwner(req, res, user, body, 'passkey-remove');
-    if (!proof) return;
-    if (readSession(req) !== user) return notSignedIn(res);
-    if (proof === 'passkey') saveDb();   // the confirming passkey's counter and last use
-    const r = removePasskeyRecord(db, user.id, id, passwordWayIn(user) ? 1 : 0);
-    if (r.error) return refuse(r);
-    dropDeviceLinks(db, user.id);
-    saveDb();
-    audit(req, 'auth.passkey.remove', { user, msg: r.row.name || null });
-    json(res, 200, { ok: true, ...passkeyState(user) });
-  },
-
-  // Makes the code another device redeems below. Same proof as adding a passkey here, because the
-  // code is how a passkey gets added there.
-  'POST /api/account/device-link': async (req, res) => {
-    const user = readSession(req);
-    if (!user) return notSignedIn(res);
-    const body = await readBody(req);
-    if (passkeyCount(user) >= MAX_PASSKEYS) return json(res, 409, LIMIT);
-    const proof = await proveOwner(req, res, user, body, 'device-link');
-    if (!proof) return;
-    if (readSession(req) !== user) return notSignedIn(res);
-    const { code, link } = createDeviceLink(db, user.id);
-    saveDb();
-    audit(req, 'auth.link.create', { user, msg: proof });
-    json(res, 200, { code, expires: link.exp });
-  },
-
-  // Redeeming, from the other device, which has no session: the code is the credential. Step one
-  // checks it and hands back creation options for the profile it belongs to, and that profile's
-  // name and id, so the screen can say where this device is being added — and tell it apart from
-  // the profile this browser is signed in as by the id, since names are not unique and whoever
-  // sends a code chooses the name of theirs. The id is the options' user handle anyway, so it
-  // tells the holder of the code nothing new. It does not use the code up —
-  // a passkey prompt dismissed by mistake can be tried again — and wrong codes pause the address.
-  // Not CSRF-exempt: only the app's own origin can create a passkey for it anyway, and a code
-  // redeemed from anywhere else is not one the owner meant to hand over.
-  'POST /api/device-link/options': async (req, res) => {
-    const body = await readBody(req);
-    if (addressPaused(req, res, 'link')) return;
-    const link = findDeviceLink(db, text(body.code));
-    if (!link) {
-      strikeAddress(req, 'link');
-      audit(req, 'auth.link.fail', { ok: false, msg: 'link-invalid' });
-      return json(res, 400, LINK_INVALID);
-    }
-    const user = db.users.find(u => u.id === link.userId);
-    if (!user || user.disabled) {
-      audit(req, 'auth.link.fail', { ok: false, uid: link.userId, msg: 'user-unavailable' });
-      return json(res, 400, LINK_INVALID);
-    }
-    // A recovery code still works on a profile full of passkeys: the oldest unused one makes room
-    // (verify below). The lost devices' passkeys are what fill it.
-    if (link.kind !== 'recovery' && passkeyCount(user) >= MAX_PASSKEYS) return json(res, 409, LIMIT);
-    const options = await moreOptions(user);
-    const cid = putChallenge({ challenge: options.challenge, uid: user.id, kind: 'link', lh: link.h });
-    json(res, 200, { cid, options, id: user.id, name: user.name, ...(link.kind === 'recovery' ? { recovery: true } : {}) });
-  },
-
-  // Step two: the new passkey is stored, the code is burned, and this device is signed in by the
-  // passkey it just made — the same cookie a passkey sign-in sets. Of two requests racing with one
-  // code, the first to finish wins and the other finds it gone.
-  'POST /api/device-link/verify': async (req, res) => {
-    const body = await readBody(req);
-    if (addressPaused(req, res, 'link')) return;
-    const code = text(body.code);
-    const c = takeChallenge(text(body.cid));
-    const link = findDeviceLink(db, code);
-    if (!link) {
-      strikeAddress(req, 'link');
-      audit(req, 'auth.link.fail', { ok: false, msg: 'link-invalid' });
-      return json(res, 400, LINK_INVALID);
-    }
-    if (!c || c.kind !== 'link' || c.lh !== link.h || c.uid !== link.userId) {
-      audit(req, 'auth.link.fail', { ok: false, uid: link.userId, msg: 'challenge-expired' });
-      return json(res, 400, { error: 'challenge expired, try again', code: 'challenge-expired' });
-    }
-    const owner = db.users.find(u => u.id === link.userId);
-    const cred = await newPasskey(req, res, c, body, 'auth.link.fail', owner || { id: link.userId });
-    if (!cred) return;
-    // Everything above awaited: the code may have been used, replaced or dropped since (a sign-out
-    // everywhere, a new password, a disable), and the profile may be gone or locked.
-    const user = db.users.find(u => u.id === link.userId);
-    if (findDeviceLink(db, code) !== link || !user || user.disabled) {
-      audit(req, 'auth.link.fail', { ok: false, uid: link.userId, msg: 'link-invalid' });
-      return json(res, 400, LINK_INVALID);
-    }
-    const recovery = link.kind === 'recovery';
-    // Recovery on a full profile: the passkey used longest ago goes, to make room for this one.
-    let dropped = null;
-    if (recovery && passkeyCount(user) >= MAX_PASSKEYS) {
-      const oldest = listPasskeys(db, user.id).slice().sort((a, b) => String(a.lastUsed || a.created || '').localeCompare(String(b.lastUsed || b.created || '')))[0];
-      if (oldest && !removePasskeyRecord(db, user.id, oldest.id, 1).error) dropped = oldest;
-    }
-    const added = addPasskeyRecord(db, user.id, cred);
-    if (added.error) {
-      audit(req, 'auth.link.fail', { ok: false, user, msg: added.code });
-      return json(res, 409, { error: added.error, code: added.code });
-    }
-    added.row.lastUsed = added.row.created;
-    burnDeviceLink(db, link);
-    saveDb();
-    audit(req, recovery ? 'auth.recovery.ok' : 'auth.link.ok', { user, msg: [added.row.name, dropped && `replaced ${dropped.name || 'a passkey'}`].filter(Boolean).join(', ') || null });
     json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   }
 };
@@ -2167,9 +1643,8 @@ const routes = {
     // that has no Coach. The key's absence is that answer.
     json(res, 200, {
       invite_only: INVITE_ONLY, allow_guest: ALLOW_GUEST,
-      // Only when on, so an instance without passwords answers exactly as it did before (#118).
-      ...(PASSWORD_LOGIN ? { password_login: true } : {}),
-      ...(SIMPLE_LOGIN ? { simple_login: true, email_reset: emailReset.configured } : {}),
+          password_login: true,
+      simple_login: true, email_reset: emailReset.configured,
       // Public: the sign-in screen is the first thing that reads it.
       ...(DEFAULT_LANG ? { default_lang: DEFAULT_LANG } : {}),
       // Public like the two flags above: the caps are not a secret, and the absence of the
@@ -2185,153 +1660,13 @@ const routes = {
   // (`token`), which the phone saves in place of the old. makeSession() writes the account's
   // current session version into it, so "sign out everywhere" ends a renewed token exactly as it
   // ended the old one — and a revoked token never gets this far. A browser's cookie is left
-  // alone: signing in renews it, as before.
+  // alone: signing in renews it.
   'GET /api/me': async (req, res) => {
     const s = sessionOf(req);
     if (!s) return json(res, 401, { error: 'not signed in' });
     const { user } = s;
     const renew = s.bearer && s.kind !== 'c' && s.exp - Date.now() < SESSION_DAYS * 86400000 / 2;
     json(res, 200, { user: publicUser(user), ...(renew ? { token: makeSession(user) } : {}) });
-  },
-
-  'POST /api/register/options': async (req, res) => {
-    const body = await readBody(req);
-    const name = text(body.name).trim().slice(0, 40);
-    if (!name) return json(res, 400, { error: 'name required' });
-    const code = text(body.code).trim().toUpperCase();
-    if (INVITE_ONLY && !db.invites.some(i => i.code === code && !i.usedBy && !i.revoked)) {
-      // The rejected code itself is never recorded — a near-miss guess in the log is a liability.
-      audit(req, 'auth.register.denied', { ok: false, name, msg: 'invite-rejected' });
-      return json(res, 403, { error: 'a valid invite code is required', code: 'invite' });
-    }
-    const uid = crypto.randomBytes(12).toString('base64url');
-    const options = await generateRegistrationOptions({
-      rpName: RP_NAME, rpID: RP_ID,
-      userID: Buffer.from(uid), userName: name, userDisplayName: name,
-      attestationType: 'none',
-      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
-      excludeCredentials: []
-    });
-    const cid = putChallenge({ kind: 'register', challenge: options.challenge, name, uid, code });
-    json(res, 200, { cid, options });
-  },
-
-  'POST /api/register/verify': async (req, res) => {
-    const body = await readBody(req);
-    const c = takeChallenge(body.cid);
-    if (!c || c.kind !== 'register' || !c.uid) {
-      auditFail(req, 'auth.register.fail', { ok: false, msg: 'challenge-expired' });
-      return json(res, 400, { error: 'challenge expired, try again', code: 'challenge-expired' });
-    }
-    let verification;
-    try {
-      verification = await verifyRegistrationResponse({
-        response: body.credential,
-        expectedChallenge: c.challenge,
-        expectedOrigin: ORIGIN,
-        expectedRPID: RP_ID,
-        requireUserVerification: false
-      });
-    } catch (e) {
-      // e.message can echo attacker-supplied response fields, so only the reason code is kept.
-      auditFail(req, 'auth.register.fail', { ok: false, name: c.name, msg: 'verify-error' });
-      return json(res, 400, verifyAnswer(e));
-    }
-    if (!verification.verified) {
-      auditFail(req, 'auth.register.fail', { ok: false, name: c.name, msg: 'not-verified' });
-      return json(res, 400, { error: 'not verified' });
-    }
-    const { credential } = verification.registrationInfo;
-    if (db.creds.find(x => x.id === credential.id)) {
-      audit(req, 'auth.register.fail', { ok: false, name: c.name, msg: 'credential-exists' });
-      return json(res, 409, { error: 'credential already registered' });
-    }
-    // Re-check the invite at the last moment (it may have been used/revoked since options), then burn it.
-    let invite = null;
-    if (INVITE_ONLY) {
-      invite = db.invites.find(i => i.code === c.code && !i.usedBy && !i.revoked);
-      if (!invite) {
-        audit(req, 'auth.register.fail', { ok: false, name: c.name, msg: 'invite-invalid' });
-        return json(res, 403, { error: 'invite code is no longer valid, ask for a new one', code: 'invite' });
-      }
-    }
-    const user = { id: c.uid, name: c.name, created: new Date().toISOString() };
-    if (invite) { user.invitedBy = invite.code; invite.usedBy = user.id; invite.usedAt = user.created; }
-    claimFirstAdmin(req, user);
-    db.users.push(user);
-    db.creds.push({
-      id: credential.id, userId: user.id,
-      publicKey: Buffer.from(credential.publicKey).toString('base64url'),
-      counter: credential.counter || 0,
-      transports: transportsOf(body.credential?.response?.transports),
-      // What Settings → Passkeys shows (#95); a passkey from before then has neither.
-      created: user.created, lastUsed: user.created
-    });
-    saveDb();
-    audit(req, 'auth.register.ok', { user, msg: invite ? invite.code : null });
-    json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
-  },
-
-  'POST /api/login/options': async (req, res) => {
-    const options = await generateAuthenticationOptions({
-      rpID: RP_ID, userVerification: 'preferred', allowCredentials: []
-    });
-    const cid = putChallenge({ kind: 'login', challenge: options.challenge });
-    json(res, 200, { cid, options });
-  },
-
-  'POST /api/login/verify': async (req, res) => {
-    const body = await readBody(req);
-    const c = takeChallenge(body.cid);
-    if (c?.kind !== 'login') {
-      auditFail(req, 'auth.login.fail', { ok: false, msg: 'challenge-expired' });
-      return json(res, 400, { error: 'challenge expired, try again', code: 'challenge-expired' });
-    }
-    const cred = db.creds.find(x => x.id === body.credential?.id);
-    if (!cred) {
-      // No credential id goes in the log: it is a stable handle for one passkey, and recording it
-      // would let an admin correlate an unknown device across attempts. Nothing here identifies
-      // the caller beyond the timestamp (and the network, if AUDIT_IP is on).
-      auditFail(req, 'auth.login.fail', { ok: false, msg: 'unknown-credential' });
-      return json(res, 404, { error: 'unknown passkey, create a profile first', code: 'unknown-credential' });
-    }
-    let verification;
-    try {
-      verification = await verifyAuthenticationResponse({
-        response: body.credential,
-        expectedChallenge: c.challenge,
-        expectedOrigin: ORIGIN,
-        expectedRPID: RP_ID,
-        requireUserVerification: false,
-        credential: {
-          id: cred.id,
-          publicKey: b64uToBuf(cred.publicKey),
-          counter: cred.counter,
-          transports: cred.transports
-        }
-      });
-    } catch (e) {
-      auditFail(req, 'auth.login.fail', { ok: false, user: db.users.find(u => u.id === cred.userId), uid: cred.userId, msg: 'verify-error' });
-      return json(res, 400, verifyAnswer(e));
-    }
-    if (!verification.verified) {
-      auditFail(req, 'auth.login.fail', { ok: false, user: db.users.find(u => u.id === cred.userId), uid: cred.userId, msg: 'not-verified' });
-      return json(res, 400, { error: 'not verified' });
-    }
-    cred.counter = verification.authenticationInfo.newCounter;
-    cred.lastUsed = new Date().toISOString();
-    saveDb();
-    const user = db.users.find(u => u.id === cred.userId);
-    if (!user) {
-      audit(req, 'auth.login.fail', { ok: false, uid: cred.userId, msg: 'user-missing' });
-      return json(res, 500, { error: 'user missing' });
-    }
-    if (user.disabled) {
-      audit(req, 'auth.login.fail', { ok: false, user, msg: 'account-disabled' });
-      return json(res, 403, { error: 'this account has been disabled', code: 'disabled' });
-    }
-    audit(req, 'auth.login.ok', { user });
-    json(res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
 
   // Reads the session purely so the sign-out can be recorded; the cookie is cleared either way.
@@ -2345,15 +1680,12 @@ const routes = {
   // "Sign out everywhere" — bumps this user's session version, which invalidates every cookie
   // ever issued for the account, on every device, including a copy someone else walked off with.
   // The caller's own cookie is cleared here too, so the browser doing it doesn't sit on a token
-  // it no longer accepts. Passkeys are untouched: signing back in works immediately.
   'POST /api/logout/all': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     user.sv = sessionVersion(user) + 1;
-    // An unredeemed pairing code is a session-in-waiting for this account; it goes too, and so
-    // does an unused device link.
+    // An unredeemed pairing code is a session-in-waiting for this account.
     for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
-    dropDeviceLinks(db, user.id);
     saveDb();
     audit(req, 'auth.logout.all', { user });
     json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
@@ -2361,15 +1693,9 @@ const routes = {
 
   // The account's own delete (App Store rule 5.1.1(v): an app you can sign up in lets you leave
   // it too). Everything goes, exactly as when an admin deletes it (removeAccount). Two things
-  // stand in front of it: the account's name, typed back by its owner, so a stray request does
-  // nothing; and the same proof the other changes to a way in ask (proveOwner), since a session
-  // on its own may be a cookie someone walked off with. The proof is asked only once the delete
-  // could go ahead, so a refusal the request already decides spends no passkey prompt and no
-  // password check. One exception: the paired phone (a Bearer token) cannot hold a passkey for
-  // this server, its origin being the app's own, so for a profile with no password that counts
-  // the pairing itself is the proof ('device'). The app asks the phone's own lock (Face ID, a
-  // fingerprint, the passcode) before it sends. With a password, the phone sends it like
-  // everyone else. A browser's cookie never gets this. The last admin is refused while anyone
+  // stand in front of it: the account's name, typed back by its owner, and the current password.
+  // A paired phone can prove ownership with its device token when no password is set.
+  // The last admin is refused while anyone
   // else is left, since nobody could then run the instance from the app; alone on it, they may
   // go. The session ends with the account: its cookie is cleared here, and any other session
   // stops verifying since the user is gone.
@@ -2385,12 +1711,7 @@ const routes = {
     const lastAdmin = () => lastAdminLeaving(user);
     const refuseLastAdmin = () => json(res, 409, { error: 'the last admin cannot leave while other profiles remain', code: 'last-admin' });
     if (lastAdmin()) return refuseLastAdmin();
-    // The pairing is the proof only for a token the pairing made: a browser's cookie value
-    // replayed in an Authorization header is a Bearer too, and is told apart by its kind (`c`,
-    // makeSession). Without this a cookie someone walked off with deleted a passkey-only profile
-    // with no proof at all, the one case this route exists to refuse.
-    const paired = s.bearer && s.kind !== 'c';
-    const proof = paired && !passwordWayIn(user) ? 'device' : await proveOwner(req, res, user, body, 'account-delete');
+    const proof = await proveOwner(req, res, user, body, 'account-delete');
     if (!proof) return;
     // Everything above awaited: the session may have ended, and another admin may have left.
     if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
@@ -2400,12 +1721,7 @@ const routes = {
     json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
   },
 
-  // Mobile app pairing: called from an already signed-in browser tab (Settings → "Pair the
-  // mobile app") to mint a short code the phone can redeem below. The code turns into a phone's
-  // token, which /api/me renews for as long as it is used and which gets the device pass on the
-  // account's own delete, so it asks the proof a device link asks (proveOwner): a session alone
-  // may be a cookie someone walked off with, and minting a phone token is how that cookie would
-  // stop having to expire.
+  // A signed-in browser confirms the password before minting a mobile pairing code.
   'POST /api/pair/create': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
@@ -2414,7 +1730,6 @@ const routes = {
     if (!proof) return;
     // Awaited: a sign-out everywhere, a disable or an admin reset may have ended this session.
     if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
-    if (proof === 'passkey') saveDb();   // the confirming passkey's counter and last use
     // One live code per profile: the newest is the one on screen. Keeping every code minted
     // let one session grow this Map without limit for five minutes at a time.
     for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
@@ -2424,8 +1739,7 @@ const routes = {
     json(res, 200, { code });
   },
 
-  // Called from the mobile app itself with the code shown in the browser. No session required —
-  // the code IS the credential, one-shot and 5-minute-lived like a WebAuthn challenge.
+  // The mobile app exchanges a one-time code for a Bearer token.
   'POST /api/pair/redeem': async (req, res) => {
     const body = await readBody(req);
     const code = text(body.code).trim().toUpperCase();
@@ -2444,11 +1758,8 @@ const routes = {
     json(res, 200, { token: makeSession(user), user: publicUser(user) });
   },
 
-  // Absent entirely while PASSWORD_LOGIN is off, so each of them is a plain 404.
-  ...(PASSWORD_LOGIN ? passwordRoutes : {}),
+  ...passwordRoutes,
 
-  // Always there: more passkeys and device links need nothing an instance has to switch on.
-  ...passkeyRoutes,
 
   // `rev` is the server's own count of writes to this profile (also stored inside the document as
   // `_rev`, so every other reader of the file — reminder tick, admin, Coach, MCP — is unaffected).
@@ -2745,10 +2056,10 @@ const routes = {
         live: livePresence(u.id),
         // The sign-in e-mail is an admin's to see (to hand out a reset code, to tell two
         // profiles apart), and only while the instance takes passwords at all.
-        ...(PASSWORD_LOGIN ? { password: hasPassword(u), email: u.email || null } : {})
+        password: hasPassword(u), email: u.email || null
       };
     });
-    json(res, 200, { users, invite_only: INVITE_ONLY, ...(PASSWORD_LOGIN ? { password_login: true } : {}), now: Date.now() });
+    json(res, 200, { users, invite_only: INVITE_ONLY, password_login: true, now: Date.now() });
   },
 
   // Drill-down: full workout history + body-weight log for one user.
@@ -2763,10 +2074,9 @@ const routes = {
         id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), owner: isOwner(u), invitedBy: u.invitedBy || null,
         // Only on an instance with password sign-in: whether they have one, and until when an
         // unused reset code is good.
-        ...(PASSWORD_LOGIN ? { password: hasPassword(u), email: u.email || null, resetUntil: u.pwReset?.exp > Date.now() ? u.pwReset.exp : null } : {}),
+        password: hasPassword(u), email: u.email || null, resetUntil: u.pwReset?.exp > Date.now() ? u.pwReset.exp : null,
         // Until when an unused recovery code is good (#584), on every instance.
-        recoveryUntil: recoveryLinkOf(db, u.id)?.exp || null
-      },
+        },
       unit: S.unit || 'kg',
       lastSync: lastSyncOf(u, S),
       routines: records(S.routines).map(r => ({ id: r.id, name: r.name, emoji: r.emoji, count: records(r.ex).length })),
@@ -2775,25 +2085,6 @@ const routes = {
       // photos and videos are the owner's own: the admin view gets no refs to them.
       workouts: records(S.workouts).reverse().map(({ media, ...w }) => w)
     });
-  },
-
-  // A recovery code (#584): for someone who lost every way in, on any instance, password sign-in
-  // or not. The person enters it on the sign-in screen, and the device they use gets a new passkey
-  // for the profile (POST /api/device-link/*, the same redemption a device link has). Who may make
-  // one for whom: any admin for a profile that is not an admin; the owner for an admin; nobody here
-  // for the owner, who uses the server's own command (recover.js), since no one else may take over
-  // the owner's login. Not for oneself, and not for a disabled profile. See issueRecovery.
-  'POST /api/admin/user/recovery': async (req, res) => {
-    const admin = requireAdmin(req, res); if (!admin) return;
-    const body = await readBody(req);
-    const u = db.users.find(x => x.id === body.id);
-    if (!u) return json(res, 404, { error: 'no such user' });
-    if (u.id === admin.id) return json(res, 400, { error: 'you are signed in: add a passkey in Settings instead', code: 'self' });
-    if (isOwner(u)) return json(res, 403, { error: 'the owner recovers with the server command (recover.js)', code: 'owner' });
-    if (isAdmin(u) && !isOwner(admin)) { audit(req, 'admin.denied', { ok: false, user: admin, target: u, msg: 'recovery' }); return json(res, 403, { error: 'only the owner can make a recovery code for an admin' }); }
-    if (u.disabled) return json(res, 400, { error: 'enable the account first', code: 'disabled' });
-    const { code, link } = issueRecovery(req, u, admin);
-    json(res, 200, { ok: true, name: u.name, code, expires: link.exp });
   },
 
   'POST /api/admin/user/disable': async (req, res) => {
@@ -2805,8 +2096,6 @@ const routes = {
     u.disabled = !!body.disabled;
     if (u.disabled) invalidateEmailReset(u);
     if (u.disabled) presence.delete(u.id);   // drop them off "training now" at once
-    // A device link made before the lock would otherwise still be waiting when it is lifted.
-    if (u.disabled) dropDeviceLinks(db, u.id);
     saveDb();
     audit(req, u.disabled ? 'admin.user.disable' : 'admin.user.enable', { user: admin, target: u });
     json(res, 200, { ok: true, id: u.id, disabled: u.disabled });
@@ -2880,7 +2169,6 @@ const routes = {
     const admin = requireAdmin(req, res); if (!admin) return;
     const body = await readBody(req);
     let code;
-    // 16 hex chars = 64 bits, up from 8 chars / 32 bits. Passkey signup has no rate limiting by
     // design (that's the reverse proxy's job) and /api/register/options tells a caller whether a
     // code is good, so the code itself has to be the thing that isn't worth guessing. Codes already
     // in db.json keep working — validation is an exact string compare, never a length or format check.
@@ -2994,7 +2282,6 @@ function bodyDeadline(req) {
 
 // The Capacitor WebView origins of the Android and iOS app.
 const APP_ORIGINS = new Set(['https://localhost', 'capacitor://localhost', 'http://localhost']);
-
 const server = http.createServer(async (req, res) => {
   bodyDeadline(req);
   // Same-origin (the deployed nginx-proxied web app) never triggers CORS, so this only matters
@@ -3049,7 +2336,6 @@ const server = http.createServer(async (req, res) => {
     // Logged, not audited: this is reachable without a session, and an audit entry per attempt
     // would let anyone fill the log. An operator who has genuinely mis-set ORIGIN needs to see
     // the mismatch, and the container log is where they will look.
-    // The answer carries ORIGIN too (the app shows it, see passkeyError in lib/api.js): it is no
     // secret, and a hostile page cannot read a response CORS never allowed it.
     console.warn(originHint(key, req.headers.origin, ORIGIN, req.headers['sec-fetch-site']));
     return json(res, 403, { error: 'cross-origin request refused', code: 'origin-mismatch', expected: ORIGIN });
@@ -3093,15 +2379,12 @@ server.headersTimeout = 60000;
 // port that was actually bound: with PORT=0 the OS picks one, and a caller that did not choose it
 // (the tests spawn the server that way, and so does anyone running two instances on one box) has
 // no other way to learn it.
-server.listen(PORT, () => console.log(`gym-api on :${server.address().port} (rpID=${RP_ID}, origin=${ORIGIN})`));
+server.listen(PORT, () => console.log(`gym-api on :${server.address().port} (origin=${ORIGIN})`));
 
-// The server's own command for a locked-out owner or admin (#584, recover.js): asked over a local
-// socket only this process's user can open (admin-socket.js explains why not by editing db.json).
-// One command: a recovery code for a profile named, or picked by id when several share the name.
-const CLI_REQ = { headers: {}, socket: {} };
+// Local account setup for profiles that need a password after an upgrade.
 startAdminSocket({
   handle: async msg => {
-    if (!msg || !['recover', 'setup-password'].includes(msg.cmd)) return { error: 'unknown command' };
+    if (!msg || msg.cmd !== 'setup-password') return { error: 'unknown command' };
     const id = typeof msg.id === 'string' ? msg.id : null;
     const k = nameKey(typeof msg.name === 'string' ? msg.name : '');
     const found = id ? db.users.filter(u => u.id === id) : k ? db.users.filter(u => nameKey(u.name) === k || u.email === k) : [];
@@ -3110,12 +2393,7 @@ startAdminSocket({
     if (found.length > 1) return { error: 'several profiles have that name: pick one with --id', matches: found.map(row) };
     const u = found[0];
     if (u.disabled) return { error: 'that profile is disabled: enable it in the admin dashboard first' };
-    if (msg.cmd === 'setup-password') {
-      if (!PASSWORD_LOGIN) return { error: 'password login is not enabled' };
-      try { await emailReset.setup(u, msg.email); return { ok: true, name: u.name }; }
-      catch (e) { if (e.status) return { error: e.message }; throw e; }
-    }
-    const { code, link } = issueRecovery(CLI_REQ, u, null);
-    return { ...row(u), code, expires: link.exp };
+    try { await emailReset.setup(u, msg.email); return { ok: true, name: u.name }; }
+    catch (e) { if (e.status) return { error: e.message }; throw e; }
   }
 });

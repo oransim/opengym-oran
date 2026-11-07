@@ -145,7 +145,7 @@ export function getState() {
   return _state
 }
 
-// Returns the user record (id + name). No passkey material, no VAPID keys, no push subs.
+// Returns the user record (id + name). No credential material, no VAPID keys, no push subs.
 export function getUser() {
   init()
   const u = _db.users.find(x => x.id === _uid) || { id: _uid, name: 'Profile', created: null }

@@ -72,7 +72,7 @@
       "enabled": false
     },
     {
-      "description": "Backend, api/package.json (@simplewebauthn/server, web-push).",
+      "description": "Backend, api/package.json (nodemailer, web-push).",
       "matchManagers": [
         "npm"
       ],
@@ -86,7 +86,7 @@
       "groupName": "api"
     },
     {
-      "description": "Two dependencies, but one of them verifies passkeys — a major there is worth reading on its own rather than alongside anything else.",
+      "description": "Review API dependency major updates separately.",
       "matchManagers": [
         "npm"
       ],

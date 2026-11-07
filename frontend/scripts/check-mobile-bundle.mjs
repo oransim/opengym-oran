@@ -4,7 +4,7 @@
  *
  * A web `vite build` that runs into the same dist/ between the mobile build and `cap sync` (two
  * builds in one worktree) leaves the web index.html beside the mobile chunks, and the APK then
- * opens the web app: no Android-only settings, a service worker, the passkey login screen. Each
+ * opens the web app: no Android-only settings, a service worker, the account login screen. Each
  * copy is checked for
  *   - the flavour tag the mobile build writes into index.html (vite.config.js, `opengym-flavor`),
  *   - every script and stylesheet index.html loads, present beside it,

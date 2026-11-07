@@ -2157,9 +2157,6 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
   .hm-wrap{display:flex;flex-direction:column;align-items:center}
 }
 
-/* Device-link QR code (components/Passkeys.jsx). */
-.ci-qr-plate{background:#fff;border-radius:var(--r-lg);padding:16px}
-.qr-canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;transition:opacity var(--fast)}
 /* ---------------------------------------------------------------- Plan -- */
 /* Schedule | Routines (views/Plan.jsx). A settings-like page, one column at every width. */
 .plan-views{margin-bottom:18px}

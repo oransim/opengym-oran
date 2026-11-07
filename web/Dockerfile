@@ -61,7 +61,7 @@ ARG BUILD_DATE=unknown
 
 LABEL maintainer="Oran Simhon https://github.com/oransim" \
     org.opencontainers.image.title="Open Gym Oran Web" \
-    org.opencontainers.image.description="Frontend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, passkey login. Your data, your server." \
+    org.opencontainers.image.description="Frontend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, password login. Your data, your server." \
     org.opencontainers.image.source="https://github.com/oransim/opengym-oran" \
     org.opencontainers.image.url="https://github.com/oransim/opengym-oran" \
     org.opencontainers.image.documentation="https://github.com/oransim/opengym-oran#readme" \

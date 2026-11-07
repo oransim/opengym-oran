@@ -1,21 +1,5 @@
-/* The server's local admin socket (#584): how `node recover.js <name>` asks the running server for
- * a recovery code.
- *
- * Why a socket and not the file: the server keeps db.json in memory and writes all of it on every
- * change (saveDb). A second process editing db.json while the server runs would be overwritten by
- * the next save, or overwrite one the server just made. So the command never touches the data: it
- * asks the server, which makes the code through the same code path an admin's request takes, in
- * its own memory, and saves and audits it like any other change.
- *
- * Who may ask: whoever can open the socket. It is a Unix socket in a directory only this process's
- * user can enter (0700, checked: ours, not a symlink, nobody else's bits), the socket itself 0600.
- * In the Docker image that is root, which is who `docker compose exec api` runs as; the Coach's
- * jobs run as their own unprivileged user and cannot reach it, any more than they can read /data.
- * Being able to reach it is being able to read db.json anyway. Nothing listens on the network.
- *
- * The path is derived from the data directory, so two instances on one machine do not meet, and
- * recover.js finds it from the same environment the server has (DATA_DIR, or ADMIN_SOCKET_DIR).
- */
+/* Local admin socket for protected account setup commands. The running API owns db.json;
+ * the setup command asks it to send an email without editing the database concurrently. */
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -88,7 +72,7 @@ export function startAdminSocket({ env = process.env, handle, log = console }) {
   return server;
 }
 
-/** One request to the running server: resolves with its answer. For recover.js. */
+/** One request to the running server: resolves with its answer. For setup-password.js. */
 export function askAdminSocket(msg, { env = process.env, timeoutMs = 10000 } = {}) {
   return new Promise((resolve, reject) => {
     const conn = net.createConnection(socketPath(env));

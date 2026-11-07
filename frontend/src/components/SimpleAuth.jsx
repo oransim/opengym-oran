@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { api, passwordLogin, passwordRegister } from '../lib/api.js'
+import { api, passwordLogin, passwordRegister, passwordResetRedeem } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { askAddDeviceData } from '../sheets.jsx'
 import { Button, Row } from './ui.jsx'
@@ -25,16 +25,18 @@ export function SimpleLogin({ resetPage = false, resetToken = '', initialMode = 
   const config = useStore(s => s.config)
   const [mode, setMode] = useState(resetPage ? 'reset' : initialMode)
   const [name, setName] = useState(''), [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState(''), [again, setAgain] = useState(''), [invite, setInvite] = useState('')
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('')
   const change = next => { setMode(next); setError(''); setNotice(''); setPassword(''); setAgain('') }
   const submit = async ev => {
     ev.preventDefault(); if (busy) return
-    const bad = (mode === 'signin' || mode === 'register') && !name.trim() ? t('Enter your username.')
+    const bad = (mode === 'signin' || mode === 'register' || mode === 'code') && !name.trim() ? t('Enter your username.')
       : (mode === 'forgot' || mode === 'register') && !looksLikeEmail(email) ? t('Enter a valid recovery email.')
       : mode === 'signin' && !password ? t('Enter your password.')
-      : (mode === 'reset' || mode === 'register') && !enough(password) ? t('Use at least {0} characters.', MIN_PASSWORD)
-      : (mode === 'reset' || mode === 'register') && password !== again ? t('The passwords do not match.')
+      : mode === 'code' && !code.trim() ? t('Enter the reset code.')
+      : (mode === 'reset' || mode === 'register' || mode === 'code') && !enough(password) ? t('Use at least {0} characters.', MIN_PASSWORD)
+      : (mode === 'reset' || mode === 'register' || mode === 'code') && password !== again ? t('The passwords do not match.')
       : mode === 'register' && config?.invite_only && !invite.trim() ? t('An invite code is required')
       : mode === 'reset' && !resetToken ? t('This link is incomplete. Request a new link.') : ''
     if (bad) { setError(bad); return }
@@ -43,6 +45,13 @@ export function SimpleLogin({ resetPage = false, resetToken = '', initialMode = 
       if (mode === 'forgot') {
         await post('/api/login/forgot-password', { email: email.trim() })
         setNotice(t('If an account uses that email, a password reset email has been requested. Check your inbox and spam folder shortly.'))
+      } else if (mode === 'code') {
+        const st = useStore.getState()
+        const user = await passwordResetRedeem(name.trim(), code.trim(), password)
+        st.setUser(user, { adopt: true })
+        await st.adoptProfile(askAddDeviceData)
+        onAuthenticated?.()
+        window.location.hash = '/home'
       } else if (mode === 'reset') {
         await post('/api/login/reset-password', { token: resetToken, password })
         // The token is in the fragment, never a server URL or referrer. Remove it after use.
@@ -61,7 +70,7 @@ export function SimpleLogin({ resetPage = false, resetToken = '', initialMode = 
     } catch (e) { setError(explain(e)) }
     finally { setBusy(false) }
   }
-  const titles = { signin: 'Sign in', register: 'Create account', forgot: 'Reset password', reset: 'Choose a new password' }
+  const titles = { signin: 'Sign in', register: 'Create account', forgot: 'Reset password', reset: 'Choose a new password', code: 'Use a reset code' }
   return <div className="narrow" style={{ maxWidth: 430, margin: 'auto', padding: compact ? '8px 0' : 'max(36px, 9vh) 8px 36px' }}>
     <div style={{ textAlign: 'center', marginBottom: 28 }}>
       <div className="small" style={{ color: 'var(--acc)', fontWeight: 700, letterSpacing: '.06em', marginBottom: 10 }}>OPEN GYM ORAN</div>
@@ -72,10 +81,11 @@ export function SimpleLogin({ resetPage = false, resetToken = '', initialMode = 
     <div className="card" style={{ padding: 22 }}>
       {notice && <p role="status" className="small" style={{ color: 'var(--acc)', marginTop: 0, lineHeight: 1.6 }}>{notice}</p>}
       <form onSubmit={submit} noValidate>
-        {(mode === 'signin' || mode === 'register') && <Field label="Username" name="username" autoComplete="username" value={name} onChange={setName} />}
+        {(mode === 'signin' || mode === 'register' || mode === 'code') && <Field label="Username" name="username" autoComplete="username" value={name} onChange={setName} />}
         {(mode === 'forgot' || mode === 'register') && <Field label="Recovery email" name="email" type="email" autoComplete="email" value={email} onChange={setEmail} />}
-        {mode !== 'forgot' && <Field label={mode === 'reset' ? 'New password' : 'Password'} name="password" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={setPassword} />}
-        {(mode === 'register' || mode === 'reset') && <>
+        {mode === 'code' && <Field label="Reset code" name="reset-code" autoComplete="one-time-code" value={code} onChange={setCode} />}
+        {mode !== 'forgot' && <Field label={mode === 'reset' || mode === 'code' ? 'New password' : 'Password'} name="password" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={setPassword} />}
+        {(mode === 'register' || mode === 'reset' || mode === 'code') && <>
           <Field label="Confirm password" name="confirm-password" type="password" autoComplete="new-password" value={again} onChange={setAgain} />
           <p className="small dim">{t('Use at least {0} characters.', MIN_PASSWORD)}</p>
         </>}
@@ -85,6 +95,8 @@ export function SimpleLogin({ resetPage = false, resetToken = '', initialMode = 
       </form>
       <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
         {mode === 'signin' && <Button variant="ghost" onClick={() => change('forgot')}>{t('Forgot password?')}</Button>}
+        {mode === 'signin' && <Button variant="ghost" onClick={() => change('code')}>{t('Have a reset code?')}</Button>}
+        {mode === 'signin' && <Button variant="ghost" onClick={() => change('register')}>{t('Create account')}</Button>}
         {mode === 'reset' && <Button variant="ghost" onClick={() => change('forgot')}>{t('Request a new link')}</Button>}
         {mode !== 'signin' && <Button variant="ghost" onClick={() => change('signin')}>{t('Back to sign in')}</Button>}
       </div>

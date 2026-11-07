@@ -12,12 +12,12 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
    phone's own screen lock comes first and the pairing carries it. The server's refusals are said
    in the UI language. The store and the API are stand-ins; what the sheet sends and says is the point. */
 const mocks = vi.hoisted(() => {
-  const state = { sheets: [], MOBILE: false, webauthn: true, proofs: { passkeys: [{ id: 'k1' }], password: true } }
+  const state = { sheets: [], MOBILE: false, webauthn: true, simple: false, proofs: { passkeys: [{ id: 'k1' }], password: true } }
   state.toast = vi.fn()
   state.deleteAccount = vi.fn(async () => {})
   state.passkeyAssertion = vi.fn(async () => ({ cid: 'c1', credential: { id: 'k1' } }))
-  state.api = vi.fn(async path => { if (path === '/api/account/passkeys') return state.proofs; return {} })
-  state.snapshot = () => ({ user: { id: 'u1', name: 'Mallory' }, deleteAccount: state.deleteAccount })
+  state.api = vi.fn(async path => { if (path === '/api/account/passkeys' || path === '/api/account/password') return state.proofs; return {} })
+  state.snapshot = () => ({ user: { id: 'u1', name: 'Mallory' }, config: { simple_login: state.simple }, deleteAccount: state.deleteAccount })
   state.lock = 'set'
   state.deviceLock = vi.fn(async () => state.lock)
   state.confirmDeviceOwner = vi.fn(async () => 'ok')
@@ -84,6 +84,7 @@ function sheet(props = {}) {
 
 beforeEach(() => {
   mocks.MOBILE = false
+  mocks.simple = false
   mocks.webauthn = true
   mocks.proofs = { passkeys: [{ id: 'k1' }], password: true }
   mocks.api.mockClear()
@@ -102,6 +103,16 @@ afterEach(() => {
 })
 
 describe('DeleteAccountSheet', () => {
+  it('uses password account details in simple mode without requesting passkeys', async () => {
+    mocks.simple = true
+    mocks.proofs = { set: true, deleteBlocked: null }
+    const { host } = sheet()
+    await toProof(host)
+    expect(mocks.api).toHaveBeenCalledWith('/api/account/password')
+    expect(mocks.api).not.toHaveBeenCalledWith('/api/account/passkeys')
+    expect(button(host, 'Confirm with a passkey')).toBeUndefined()
+    expect(password(host)).toBeTruthy()
+  })
   it('offers the backup export first: the JSON one, or the zip when there are photos and videos', () => {
     const plain = sheet()
     act(() => button(plain.host, 'Export backup (JSON)').click())

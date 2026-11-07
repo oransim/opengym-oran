@@ -15,7 +15,6 @@
  * has one (the parser has already made it a slash). nginx merges slashes and resolves an encoded
  * "..%2F" before it looks for a file, so it serves the real app at
  * https://gym.example//evil.example/..%2F/, scripts and all. Taken as-is, that path starts with
- * "//", which is a URL to another host, and every API call, the passkey sign-in included, went
  * to evil.example. A base that starts with exactly one slash can only ever name a path on this
  * origin. The URL parser gets the last word all the same: a base it would still read as another
  * host is refused rather than used.

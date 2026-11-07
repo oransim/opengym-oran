@@ -24,11 +24,11 @@ curl http://localhost:8080/api/health
 
 Open <http://localhost:8080> and create your profile. `docker compose up --build` builds both containers from this repository. After GitHub Actions is enabled and the tests pass on `main`, the workflow publishes `ghcr.io/oransim/opengym-oran-api:edge` and `ghcr.io/oransim/opengym-oran-web:edge`.
 
-With `SIMPLE_LOGIN=1`, the web app uses username and password, with email links for forgotten passwords. New passwords need at least 6 characters. Browser sessions last 90 days by default. Configure a separate SMTP sender and complete the existing-account migration before enabling the new login on a passkey-only account. See [account setup and email recovery](docs/SELF_HOSTING.md#usernamepassword-login-and-email-recovery).
+The web app uses username and password, with email links for forgotten passwords. New passwords need at least 6 characters. Browser sessions last 90 days by default. Configure a separate SMTP sender. For an existing account without a password, use the setup command in the self-hosting guide. See [account setup and email recovery](docs/SELF_HOSTING.md#usernamepassword-login-and-email-recovery).
 
 ## Use it from your phone
 
-Passkeys need HTTPS and a stable hostname. Before registering from your phone, set `RP_ID` to that hostname and `ORIGIN` to its exact `https://` address in `.env`. Put HTTPS in front of the web container, then restart the stack. Changing the hostname later means registering new passkeys.
+Set `ORIGIN` in `.env` to the exact HTTPS address opened from your phone, put HTTPS in front of the web container, then restart the stack. This address is also used in password reset links.
 
 The API stores accounts, routines, workouts, and uploads in `./data`. Back up that directory. For a single-user public instance, create your profile first, then consider `INVITE_ONLY=1` and `ALLOW_GUEST=0` in `.env`. See [self-hosting](docs/SELF_HOSTING.md) for setup and backup details.
 

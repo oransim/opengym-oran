@@ -134,8 +134,8 @@ Additional info:
     }
     ```
 
-And that's about it. Now you should be able to access your opengym instance from your local network via https with working passkeys.  
-Be sure to update the Open Gym Oran config accordingly (`RP_ID=opengym.myhomelab.dedyn.io`, `ORIGIN=https://opengym.myhomelab.dedyn.io`, see [SELF_HOSTING.md](./SELF_HOSTING.md#phone-access-and-passkeys)).
+And that's about it. Now you should be able to access your opengym instance from your local network via https with working password sign-in.
+Be sure to update the Open Gym Oran config accordingly (`ORIGIN=https://opengym.myhomelab.dedyn.io`, see [SELF_HOSTING.md](./SELF_HOSTING.md#phone-access)).
 
 **If the name does not resolve on your phone:** many home routers (Fritz!Box, some ISP boxes) have *DNS rebind protection* and silently drop public names that resolve to a private IP. Add `myhomelab.dedyn.io` to the router's rebind exception list, or run your own resolver.
 

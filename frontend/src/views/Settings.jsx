@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, forwardRef, useSyncExternalStore } from 'react'
 import { useNavigate, useParams, useLocation, Navigate } from 'react-router-dom'
-import { useStore, DEF, hasData } from '../store/useStore.js'
+import { useStore, DEF } from '../store/useStore.js'
 import { healthStatus, loadHealth, enableHealth, disableHealth, openHealthConnect, onHealthChange, enableRead, disableRead } from '../lib/health-sync.js'
 import { workoutControls } from '../lib/workout-controls.js'
 import { speedUnitOf } from '../lib/speed.js'
@@ -15,7 +15,7 @@ import { effortOf } from '../lib/history.js'
 import { figureOf } from '../lib/exercises.js'
 import { unlock, chime, playOnSilentSupported, vibrateSupported, appleTouchDevice } from '../lib/sound.js'
 import { REST_SOUND_IDS, restSoundOf } from '../lib/rest-sounds.js'
-import { api, webauthnOK, passkeyRegister, passkeyError, IS_ANDROID } from '../lib/api.js'
+import { api, IS_ANDROID } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush, syncPushSubscription } from '../lib/push.js'
 import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, tn, LANGS, INSTR_LANGS, EXERCISE_NAME_LANGS, baseLang, dateLocale } from '../lib/i18n.js'
@@ -44,12 +44,11 @@ import { showsConnection, showsLocalLine } from '../components/SyncBanner.jsx'
 import BackupFolderRow, { useBackupFolder, autoBackupSubtitle } from '../components/BackupFolderRow.jsx'
 import AppIconRow from '../components/AppIconRow.jsx'
 import { AnimationQualityRow } from '../components/Animations.jsx'
-import { ServerSyncSection, KeptChangesRows, leaveServer, connectServer, passkeySignIn } from '../components/ServerSync.jsx'
-import { passwordOn, PasswordRow, openPasswordSignIn, openPasswordRegister } from '../components/PasswordAuth.jsx'
+import { ServerSyncSection, KeptChangesRows, leaveServer, connectServer } from '../components/ServerSync.jsx'
 import { SimpleAccountRows, openSimpleSignIn } from '../components/SimpleAuth.jsx'
-import { usePasskeys, PasskeysRow, DeviceLinkRow, openDeviceLinkRedeem, PairSheet } from '../components/Passkeys.jsx'
+import { openPairMobile } from '../components/PairMobile.jsx'
 import { DeleteAccountRow } from '../components/DeleteAccount.jsx'
-import { Section, Row, SelectRow, Switch, Segmented, Button, TextField, SearchField } from '../components/ui.jsx'
+import { Section, Row, SelectRow, Switch, Segmented, Button, SearchField } from '../components/ui.jsx'
 import { PAGES, ROOT_GROUPS, pageVisible, searchSettings, pageTrail } from './settings-pages.js'
 import { platformNow } from '../lib/platform-now.js'
 import { pathBefore } from '../lib/nav.js'
@@ -108,17 +107,10 @@ export default function Settings({ page = null, find = null, via = null, entryKe
   const coachLocal = useStore(s => s.coachLocal)
   // Name-and-password sign-in, where the instance offers it (#118).
   const config = useStore(s => s.config)
-  const pwOn = passwordOn(config)
   // What the app is showing, which for a profile that never picked a language is worked out on
   // this device rather than stored (#303).
   const lang = effectiveLang(S, config)
-  // This profile's passkeys and the code for another device (#95). A change to them is read back
-  // here and by the password row, whose "Remove" depends on there being a passkey.
-  // On a paired phone only the code for another device uses it (#551).
-  const passkeys = usePasskeys(!!user && !DEMO && (page === 'account'))
-  const [credsV, setCredsV] = useState(0)
-  const credsChanged = () => { passkeys.load(); setCredsV(v => v + 1) }
-  const { update, importConflict, importBackup, setUnit, resetEverything: resetAll, setUser, pullState, pushState, resetDemo } = useStore()
+  const { update, importConflict, importBackup, setUnit, resetEverything: resetAll, resetDemo } = useStore()
   const toast = useUI(s => s.toast)
   const fileRef = useRef(null)
   const importRef = useRef(null)
@@ -173,7 +165,6 @@ export default function Settings({ page = null, find = null, via = null, entryKe
   }, [page])
 
   // A search hit: scroll its row (or button) into view and flash it once. A row that shows only
-  // once the page has heard back from the server (web push, the passkey list) is waited for a
   // moment; still missing, the hit's `via` row, if it names one, is flashed instead, with a word
   // on why.
   useEffect(() => {
@@ -346,13 +337,11 @@ export default function Settings({ page = null, find = null, via = null, entryKe
   }
   // Whether any custom exercise has a photo or video: the rows about them only show then.
   const hasMedia = referencedFiles(S).length > 0
-  const registerHere = () => useUI.getState().openSheet(close => <RegisterInline close={close} setUser={setUser} pushState={pushState} pullState={pullState} toast={toast} />)
   /* Disconnect (phone), Sign out, Sign out everywhere. None of them wipes this device while the
      server is missing a change: the confirm no longer promises a sync it never checked, and when
      something is owed, a second sheet says how much and offers to try again, to export a backup,
      or to go ahead anyway with the changes kept on this device (components/ServerSync.jsx).
-     "Sign out everywhere" also ends every paired phone's token — the phones have no passkey to
-     sign in with, so they have to be paired again, and the confirm says so. Failing, it touches
+     "Sign out everywhere" also ends every paired phone's token, so phones must pair again. Failing, it touches
      nothing local: still signed in here, and the toast says so. */
   const kept = t('The changes your server has not seen are kept on this device, and added back when it connects as this account again.')
   // A workout running here is kept aside by the sign-out (useStore stashActive): the confirm says so.
@@ -372,7 +361,7 @@ export default function Settings({ page = null, find = null, via = null, entryKe
   })
   const signOutEverywhere = () => confirmSheet({
     title: t('Sign out everywhere?'),
-    message: t('Signs this profile out on every device, including this one. Phones paired with it are disconnected and have to be paired again. Your passkeys keep working, so you can sign in with them again anytime.') + running(),
+    message: t('Signs this profile out on every device, including this one. Sign in again with your username and password.') + running(),
     confirmText: t('Sign out everywhere'), danger: true,
     onConfirm: () => leave('everywhere', t('Signed out on all devices')),
   })
@@ -400,7 +389,7 @@ export default function Settings({ page = null, find = null, via = null, entryKe
   /* ---------------- what the pages and the search need to know about this device ---------------- */
   const canVibrate = vibrateSupported()
   const ctx = {
-    user, mobile: MOBILE, android, ios: MOBILE && ios, appIcons: MOBILE && platformNow() === 'ios', demo: DEMO, wakeOK, hasMedia, pwOn, webauthn: webauthnOK(),
+    user, mobile: MOBILE, android, ios: MOBILE && ios, appIcons: MOBILE && platformNow() === 'ios', demo: DEMO, wakeOK, hasMedia,
     sound: !!S.sound, playOnSilent: playOnSilentSupported(), canVibrate, vibrate: S.vibrate !== false,
     profiles: (S.equipProfiles || []).length > 0, nameLang: EXERCISE_NAME_LANGS.includes(baseLang(lang)),
     pushOK: !MOBILE && pushSupported(), reminderOn: !!S.reminder?.on, nudge: !!S.reminder?.nudge,
@@ -942,58 +931,29 @@ export default function Settings({ page = null, find = null, via = null, entryKe
       {user && !DEMO && <ServerSyncSection>
         {MOBILE && <>
           {user.admin && <Row icon="crown" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
-          {/* A code to sign in on a computer (#551), behind the same proof as in a browser. */}
-          <DeviceLinkRow state={passkeys.st} />
           <AccountIdRow id={user.id} />
           <Row icon="signOut" iconTint="var(--red)" title={t('Disconnect')} danger onClick={disconnect} />
         </>}
       </ServerSyncSection>}
-
-      {/* account (demo and mobile builds have nothing to sign in to) */}
-      {/* A local-only phone has no account to hand another device a code for (#551). */}
-      {!(MOBILE && user) && <Section title={MOBILE ? t('Your data') : DEMO ? t('Demo') : t('Account')}
-        footer={MOBILE ? t('Signing in on your computer too needs your own server. Connect this phone to it, and Add another device then gives the computer a code.') : null}>
+      {!(MOBILE && user) && <Section title={MOBILE ? t('Your data') : DEMO ? t('Demo') : t('Account')}>
         {MOBILE ? <>
           <Row icon="lock" iconTint="var(--acc)" title={t('All data stays on this phone')} subtitle={t('No account, no cloud. Back it up anytime in Data & backup.')} />
-          <Row icon="cloud" iconTint="var(--indigo)" title={t('Connect to my server')} subtitle={t('Sync this device to your own self-hosted openGym instead.')} accessory="chevron"
-            onClick={connectServer} />
+          <Row icon="cloud" iconTint="var(--indigo)" title={t('Connect to my server')} subtitle={t('Sync this device to your own self-hosted openGym instead.')} accessory="chevron" onClick={connectServer} />
           <KeptChangesRows />
         </> : DEMO ? <>
           <Row icon="info" iconTint="var(--acc)" title={t('You’re in the demo')} subtitle={t('Example data, stored only in this browser. Go wild and change anything you like.')} />
-          <Row icon="reset" iconTint="var(--blue)" title={t('Reset demo data')} accessory="chevron"
-            onClick={() => confirmSheet({ title: t('Reset demo data?'), message: t('Puts the example plan, workouts and weigh-ins back the way they started.'), confirmText: t('Reset'), onConfirm: () => { resetDemo(); nav('/home'); toast(t('Demo data reset')) } })} />
-          <Row icon="rocket" iconTint="var(--indigo)" title={t('Self-host openGym')} subtitle={t('Passkey sign-in, sync across your devices, your own data.')} accessory="chevron"
-            onClick={() => window.open(REPO, '_blank', 'noopener')} />
+          <Row icon="reset" iconTint="var(--blue)" title={t('Reset demo data')} accessory="chevron" onClick={() => confirmSheet({ title: t('Reset demo data?'), message: t('Puts the example plan, workouts and weigh-ins back the way they started.'), confirmText: t('Reset'), onConfirm: () => { resetDemo(); nav('/home'); toast(t('Demo data reset')) } })} />
+          <Row icon="rocket" iconTint="var(--indigo)" title={t('Self-host openGym')} subtitle={t('Password sign-in, sync across your devices, your own data.')} accessory="chevron" onClick={() => window.open(REPO, '_blank', 'noopener')} />
         </> : user ? <>
           {user.admin && <Row icon="crown" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
-          {config?.simple_login ? <SimpleAccountRows /> : <>
-          <PasskeysRow state={passkeys.st} changed={credsChanged} />
-          <DeviceLinkRow state={passkeys.st} />
-          <Row icon="qr" iconTint="var(--blue)" title={t('Pair the mobile app')} subtitle={t('Connect the openGym app on your phone to this account.')} accessory="chevron"
-            onClick={() => useUI.getState().openSheet(close => <PairSheet close={close} />)} />
-          {pwOn && <PasswordRow version={credsV} />}
-          </>}
+          <SimpleAccountRows />
+          <Row icon="qr" iconTint="var(--blue)" title={t('Pair the mobile app')} accessory="chevron" onClick={openPairMobile} />
           <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={signOutHere} />
           <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
           <AccountIdRow id={user.id} />
-        </> : config?.simple_login ? <>
-          <Row icon="key" title={t('Sign in')} accessory="chevron" onClick={() => openSimpleSignIn()} />
-          <KeptChangesRows />
-        </> : webauthnOK() ? <>
-          <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
-          <Row icon="fingerprint" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={passkeySignIn} />
-          {/* The Login screen offers both of these; a guest who skipped it had no way to either from here. */}
-          {pwOn && <Row icon="plusCircle" iconTint="var(--orange)" title={t('Create profile with a password')} accessory="chevron" onClick={openPasswordRegister} />}
-          {pwOn && <Row icon="key" iconTint="var(--orange)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />}
-          <Row icon="qr" iconTint="var(--blue)" title={t('Use a code from your other device')} accessory="chevron" onClick={openDeviceLinkRedeem} />
-          <KeptChangesRows />
-        </> : pwOn ? <>
-          {/* No passkeys in this browser (plain http on a LAN address, say): a password is the way in. */}
-          <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create new profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={openPasswordRegister} />
-          <Row icon="key" iconTint="var(--orange)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />
-          <KeptChangesRows />
         </> : <>
-          <Row icon="lock" iconTint="var(--grey)" title={t('Passkeys not supported in this browser.')} />
+          <Row icon="key" title={t('Sign in')} accessory="chevron" onClick={() => openSimpleSignIn()} />
+          <Row icon="plusCircle" title={t('Create account')} accessory="chevron" onClick={() => openSimpleSignIn('register')} />
           <KeptChangesRows />
         </>}
       </Section>}
@@ -1521,35 +1481,6 @@ function AccountIdRow({ id }) {
 // The same registration as the sign-in screen's, reached from Settings instead. It asks for
 // the invite code on the same terms: an invite-only instance rejects a registration without
 // one, so a form that cannot collect it is a form that cannot succeed.
-function RegisterInline({ close, setUser, pushState, pullState, toast }) {
-  const nameRef = useRef(null)
-  const [code, setCode] = useState('')
-  const [inviteOnly, setInviteOnly] = useState(false)
-  useEffect(() => { api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => {}) }, [])
-  const go = async () => {
-    const n = (nameRef.current.value || '').trim()
-    if (!n) { toast(t('Enter a name')); return }
-    if (inviteOnly && !code.trim()) { toast(t('An invite code is required')); return }
-    try {
-      const u = await passkeyRegister(n, code.trim()); setUser(u); close()
-      if (hasData(useStore.getState().S)) { await pushState(); toast(t('Profile created, and your data moved into it')) }
-      else { await pullState(); toast(t('Welcome, {0}', u.name)) }
-    } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(passkeyError(e, t('Registration failed'))) }
-  }
-  return <>
-    <h3>{t('Create your profile')}</h3>
-    <div className="muted small" style={{ marginBottom: 14 }}>{t('Pick a name, then confirm with your device.')}</div>
-    <TextField ref={nameRef} placeholder={t('Your name')} maxLength={40} />
-    {inviteOnly && <>
-      <div style={{ height: 10 }} />
-      <input className="input" placeholder={t('Invite code')} maxLength={40} value={code}
-        onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} />
-      <div className="dim small" style={{ marginTop: 6 }}>{t('This app is invite-only. Enter the code you were given.')}</div>
-    </>}
-    <div style={{ height: 12 }} /><Button variant="primary" onClick={go}>{t('Create passkey')}</Button>
-  </>
-}
-
 // Android app: writing finished workouts and weigh-ins to Health Connect (#200), the phone's
 // own store for health data, where other apps can read them. A fact about this phone, kept in
 // its own file (lib/health-sync.js) and not in S, so it never switches on anywhere else. The card

@@ -16,7 +16,7 @@ Open <http://localhost:8080>. Docker Compose builds from this source because the
 
 ## Username/password login and email recovery
 
-The simple web flow uses username/password and **Forgot password? → email link → new password**. Set `PASSWORD_LOGIN=1` and, after existing-account setup, `SIMPLE_LOGIN=1`. The normal web screens omit passkeys, QR codes and other-device codes. Legacy credentials remain internally during migration; the native app retains its existing protocol.
+The web app uses username and password for sign-in and account creation. **Forgot password?** sends an email link to choose a new password. A profile’s recovery email is required when creating an account.
 
 Use a **separate sender account**. The sender and each profile’s recovery recipient are independent. Nothing connects your personal or Workspace mailbox automatically. Gmail supports `smtp.gmail.com` on port 465 with an [App Password](https://support.google.com/accounts/answer/185833) after enabling 2-Step Verification. Enter the sender credentials locally in the ignored `.env` file:
 
@@ -30,27 +30,29 @@ SMTP_FROM=your-separate-tracker-account@gmail.com
 
 Do not paste sender credentials into chat or commit them. `SMTP_FROM` is a plain authorized email address. Port 465 uses implicit TLS; other remote SMTP ports require STARTTLS. Certificate verification stays enabled. Set `ORIGIN` to your real HTTPS app address before sending links; HTTP is accepted only for localhost development. Reset links use that trusted address and never the request’s Host header.
 
-**Existing passkey-only account:** back up `data`, retain your current working login, and deploy the new backend and web build together with `SIMPLE_LOGIN=0` and the SMTP configuration first. This keeps the previous login choices available while enabling the new email-link page. Then, on the server, run:
+**Existing account without a password:** back up `data`, then deploy the new backend and web build together with SMTP configured. Run the protected local setup command:
 
 ```bash
-docker compose exec api node setup-password.js "oran" your-recovery-address@example.com
+docker compose exec api node setup-password.js "your-username" your-recovery-address@example.com
 ```
 
-This protected local command sends an ordinary setup email for the existing profile. It does not create a replacement account, choose your password, revoke current access, or alter training files. Open the email link and choose your password in the app. Confirm a username/password login in another browser before setting `SIMPLE_LOGIN=1`, restarting the API with the updated environment, and refreshing the app. Keep the previous image available for rollback. An unavailable sender is an error, not a completed migration.
+The command sends a setup link to the existing profile. Open it and choose a password before signing out of the current session. It does not create a replacement account or change training files. Confirm you can sign in with the new password in another browser.
 
 Reset links work once for 30 minutes. Requesting one keeps your current password and sessions working; completing it signs out old sessions and returns to normal sign-in. New requests, password changes and recovery-email changes invalidate earlier links. Request responses do not identify matching accounts. Missing SMTP configuration or failed connection/authentication checks are shown as temporary unavailability. Once queued, the acknowledgement says only that an email was requested. A later message rejection is reported privately in the server log without recipient or token details, so it cannot reveal account existence. No reset tokens or SMTP credentials are returned in request responses or written to logs.
 
-## Phone access and passkeys
+## Bundled routine and class library
 
-Browsers accept passkeys over HTTPS, with `http://localhost` as the local exception. Pick a hostname before creating a passkey on your phone. Put a reverse proxy, tunnel, or Tailscale Serve in front of port 8080, then set these values in `.env`:
+The Routines screen includes routine and class libraries packaged with the web app in `frontend/src/lib/routine-catalog.json`. They do not depend on any account remaining on the server. The initial class templates are yoga, Pilates, tricking, climbing, and functional. To add or update templates later, choose **Export plan file** in the app while using kilograms, then run `node scripts/publish-routine-catalog.mjs path/to/exported-plan.json` at the repository root. The script merges routines and classes by name, keeps existing templates that are absent from the export, and includes referenced custom exercises. Review and commit the catalog file, then rebuild the web image. A plan export contains no workouts or weigh-ins.
+
+## Phone access
+
+For a phone browser, put a reverse proxy, tunnel, or Tailscale Serve in front of port 8080 and set the app address in `.env`:
 
 ```dotenv
-RP_ID=gym.example.com
 ORIGIN=https://gym.example.com
-RP_NAME=Open Gym Oran
 ```
 
-`RP_ID` is only the hostname; `ORIGIN` includes `https://`. Both must match the address opened on the phone. Restart with `docker compose up -d --build` after changing them. A passkey made for one hostname cannot sign in on another.
+The recovery email link uses `ORIGIN`, so set it to the exact HTTPS address people open. Restart with `docker compose up -d --build` after changing it.
 
 A Caddy example for a server with a public DNS record:
 

@@ -7,7 +7,7 @@ self-hosted `./data` directory, and log a workout you describe to it.
 
 It runs locally as a stdio process spawned by the LLM client and adds no new container. The
 read tools need no authentication: they read the same `state-<uid>.json` files the openGym api
-already writes, and the LLM never sees passkeys, VAPID keys, or session secrets. The one write
+already writes, and the LLM never sees VAPID keys or session secrets. The one write
 tool, `log_workout`, is off until you pair it with your server (see
 [Logging workouts](#logging-workouts)).
 
@@ -180,7 +180,7 @@ dependencies landed in `frontend/`, no public exports changed.
 - **No new container.** stdio transport is spawned by the LLM client; nothing to add to
   `docker-compose.yml`.
 - **No new auth.** The read tools' boundary is the filesystem — same as `docker compose`
-  running on the user's box. No passkey material, VAPID keys, or session secrets ever cross it.
+  running on the user's box. No VAPID keys or session secrets ever cross it.
   `log_workout` uses the paired-session token the phone app already uses; no new kind of
   credential, no new api route.
 - **No telemetry.** The read tools make no network call. `log_workout` talks to your own

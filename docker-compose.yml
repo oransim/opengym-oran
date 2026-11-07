@@ -1,7 +1,7 @@
 name: opengym
 
 services:
-  # Passkey auth + per-user data (Node, no framework).
+  # Password auth + per-user data (Node, no framework).
   # image: prebuilt (docker compose pull). build: from source (docker compose up --build).
   api:
     image: &api-image ghcr.io/oransim/opengym-oran-api:${IMAGE_TAG:-edge}
@@ -28,7 +28,7 @@ services:
       # requests by those headers instead of lumping everyone in as "the web container".
       - TRUST_PROXY=${TRUST_PROXY:-1}
     volumes:
-      - ./data:/data         # users, passkeys, per-user state, session secret — BACK THIS UP
+      - ./data:/data         # users, per-user state, session secret — BACK THIS UP
                              # (and uploads/: the photos and videos of custom exercises)
       # Provider credential cache (Codex). A sibling of ./data on purpose: the documented backup
       # is `tar czf … data/`, and a live refresh token must not end up inside it. Nothing here
@@ -52,7 +52,7 @@ services:
       - ./data:/data
 
   # Builds the React frontend (multi-stage) and serves it, proxying /api → api
-  # and the exercise animations, which are part of the image. Single origin for passkeys.
+  # and the exercise animations, which are part of the image. One origin for browser writes.
   web:
     image: ghcr.io/oransim/opengym-oran-web:${IMAGE_TAG:-edge}
     build:

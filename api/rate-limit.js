@@ -1,8 +1,6 @@
 /* In-memory throttling for the password routes (#118).
  *
- * Until password sign-in there was nothing worth guessing: a passkey assertion cannot be
  * brute-forced, invite codes are 64 random bits and pairing codes live five minutes — which is
- * why the passkey and pairing routes are still not counted here. A password is the first secret
  * a person chooses, so the API now has to say no after enough wrong answers instead of leaving
  * that to whatever proxy the self-hoster did or did not put in front.
  *

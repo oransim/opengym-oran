@@ -1,0 +1,433 @@
+{
+  "unit": "kg",
+  "routines": [
+    {
+      "id": "flex-24e03a58582c",
+      "name": "Side split routine",
+      "emoji": "stretch",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "4420",
+          "sets": 1,
+          "mode": "time",
+          "sec": 180,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Easy pace to warm up."
+        },
+        {
+          "id": "4286",
+          "sets": 1,
+          "mode": "reps",
+          "reps": 20,
+          "weight": 0,
+          "restSec": 15,
+          "note": "10 circles each direction."
+        },
+        {
+          "id": "4630",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 20,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "note": "10 controlled swings per leg."
+        },
+        {
+          "id": "2569",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 12,
+          "weight": 0,
+          "restSec": 15,
+          "note": "6 per side; use a comfortable range."
+        },
+        {
+          "id": "2571",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Slow, controlled rocking."
+        },
+        {
+          "id": "1898",
+          "sets": 2,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "sideRestSec": 10,
+          "note": "A gentle inner-thigh stretch."
+        },
+        {
+          "id": "1899",
+          "sets": 2,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "sideRestSec": 10,
+          "note": "Stay upright and switch sides."
+        },
+        {
+          "id": "3458",
+          "sets": 3,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Ease in only as far as comfortable; come out slowly."
+        }
+      ]
+    },
+    {
+      "id": "flex-8a8d91f5197c",
+      "name": "Pancake split routine",
+      "emoji": "stretch",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "4420",
+          "sets": 1,
+          "mode": "time",
+          "sec": 180,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Easy pace to warm up."
+        },
+        {
+          "id": "4286",
+          "sets": 1,
+          "mode": "reps",
+          "reps": 20,
+          "weight": 0,
+          "restSec": 15,
+          "note": "10 circles each direction."
+        },
+        {
+          "id": "3502",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 20,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "note": "10 controlled swings per leg."
+        },
+        {
+          "id": "5555",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Hinge at the hips with a long back."
+        },
+        {
+          "id": "1913",
+          "sets": 2,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "sideRestSec": 10,
+          "note": "Gentle hamstring stretch; switch sides."
+        },
+        {
+          "id": "0965",
+          "sets": 2,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Hinge forward without forcing the range."
+        },
+        {
+          "id": "1587",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 8,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Move slowly with the breath."
+        },
+        {
+          "id": "1902",
+          "sets": 3,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Seated straddle: hinge forward from the hips, keeping the spine long."
+        },
+        {
+          "id": "1494",
+          "sets": 2,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Relax into a comfortable position."
+        }
+      ]
+    },
+    {
+      "id": "flex-48ebfd040d0e",
+      "name": "Daily morning stretches",
+      "emoji": "stretch",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "4420",
+          "sets": 1,
+          "mode": "time",
+          "sec": 120,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Start at an easy pace."
+        },
+        {
+          "id": "4395",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Relax your shoulders; circle both directions."
+        },
+        {
+          "id": "4580",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Move slowly with your breath."
+        },
+        {
+          "id": "4286",
+          "sets": 1,
+          "mode": "reps",
+          "reps": 20,
+          "weight": 0,
+          "restSec": 15,
+          "note": "10 circles each direction."
+        },
+        {
+          "id": "9653",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Easy turns without forcing the twist."
+        },
+        {
+          "id": "4633",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 6,
+          "weight": 0,
+          "restSec": 15,
+          "note": "3 slow repetitions per side."
+        },
+        {
+          "id": "1053",
+          "sets": 2,
+          "mode": "time",
+          "sec": 20,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "sideRestSec": 10,
+          "note": "A gentle stretch at the front of the hip."
+        },
+        {
+          "id": "0789",
+          "sets": 2,
+          "mode": "time",
+          "sec": 20,
+          "weight": 0,
+          "restSec": 15,
+          "side": true,
+          "sideRestSec": 10,
+          "note": "Keep the hinge easy; switch legs."
+        },
+        {
+          "id": "4867",
+          "sets": 1,
+          "mode": "time",
+          "sec": 45,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Small, relaxed movements."
+        },
+        {
+          "id": "0945",
+          "sets": 2,
+          "mode": "time",
+          "sec": 30,
+          "weight": 0,
+          "restSec": 15,
+          "note": "Breathe slowly and relax your shoulders."
+        }
+      ]
+    },
+    {
+      "id": "plyo-tricking-power-main",
+      "name": "Tricking power",
+      "emoji": "figureRun",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "cplyo-tricking-warmup",
+          "sets": 1,
+          "mode": "time",
+          "sec": 420,
+          "weight": 0,
+          "restSec": 30,
+          "noProg": true,
+          "note": "Main session, about 20–25 minutes. First 3 weeks: once weekly. Leave roughly 48–72 hours between demanding jumping days, including tricking class. Account for climbing and Pilates fatigue. If paired with climbing or Pilates, jump first while fresh. Warm up 6–8 minutes as described in the exercise details."
+        },
+        {
+          "id": "9070",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 90,
+          "noProg": true,
+          "note": "Small springy two-foot hops, mainly through the ankles. Keep knees slightly bent and body tall. Rest 60–90 seconds between sets."
+        },
+        {
+          "id": "9513",
+          "sets": 3,
+          "mode": "reps",
+          "reps": 3,
+          "weight": 0,
+          "restSec": 120,
+          "noProg": true,
+          "note": "Brief dip, strong arm swing, jump straight upward. Land with control. Reset 5–10 seconds between repetitions; rest 2 minutes between sets. Do not tuck the knees. FIRST SESSION ONLY: perform 2 sets and skip the third. Later sessions: 3 sets."
+        },
+        {
+          "id": "11782",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 8,
+          "weight": 0,
+          "restSec": 90,
+          "noProg": true,
+          "note": "8 jumps TOTAL per set: 4 left and 4 right. Take off and land on BOTH feet. Keep jumps small; hold every landing for 2 seconds. Rest 90 seconds. Once consistently controlled, replace this exercise with short skater bounds: 2 sets of 3 PER SIDE (6 total per set), holding each single-leg landing. Increase distance gradually; do not add bounds on top."
+        }
+      ]
+    },
+    {
+      "id": "plyo-tricking-power-optional",
+      "name": "Tricking power — optional short",
+      "emoji": "figureRun",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "cplyo-tricking-warmup",
+          "sets": 1,
+          "mode": "time",
+          "sec": 420,
+          "weight": 0,
+          "restSec": 30,
+          "noProg": true,
+          "note": "OPTIONAL second weekly session, only after 3 comfortable weeks of the main session. Add only when soreness settles between sessions and tricking performance stays strong. Leave roughly 48–72 hours from the main session and tricking class. Skip on busy or poorly recovered weeks. Warm up 6–8 minutes; keep this session short."
+        },
+        {
+          "id": "9070",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "restSec": 90,
+          "noProg": true,
+          "note": "Small springy two-foot hops, mainly through the ankles. Keep knees slightly bent and body tall. Rest 60–90 seconds between sets."
+        },
+        {
+          "id": "9513",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 3,
+          "weight": 0,
+          "restSec": 120,
+          "noProg": true,
+          "note": "Brief dip, strong arm swing, jump straight upward. Land with control. Reset 5–10 seconds between repetitions; rest 2 minutes between sets. Do not tuck the knees. Optional short session: keep this at 2 sets."
+        }
+      ]
+    },
+    {
+      "id": "mw0q0495y10kb",
+      "name": "yoga",
+      "emoji": "stretch",
+      "kind": "visit",
+      "ex": []
+    },
+    {
+      "id": "class-pilates",
+      "name": "Pilates",
+      "emoji": "stretch",
+      "kind": "visit",
+      "ex": []
+    },
+    {
+      "id": "mw1qgs5dojw4u",
+      "name": "tricking",
+      "emoji": "figureRun",
+      "kind": "visit",
+      "ex": []
+    },
+    {
+      "id": "mvzakrceqe4ew",
+      "name": "climbing",
+      "emoji": "figureStrength",
+      "kind": "visit",
+      "ex": []
+    },
+    {
+      "id": "class-functional",
+      "name": "functional",
+      "emoji": "stretch",
+      "kind": "visit",
+      "ex": []
+    }
+  ],
+  "customEx": [
+    {
+      "id": "cplyo-tricking-warmup",
+      "n": "Tricking power warm-up",
+      "bp": "upper legs",
+      "eq": "body weight",
+      "cat": "mobility",
+      "tg": "quads",
+      "sm": [
+        "calves",
+        "glutes"
+      ],
+      "primaries": [
+        "quads"
+      ],
+      "secondaries": [
+        "calves",
+        "glutes"
+      ],
+      "muscleGroups": [
+        "quads",
+        "calves",
+        "glutes"
+      ],
+      "custom": true,
+      "desc": "Warm up for 6–8 minutes: easy jogging or marching, ankle rocks, controlled squats, reverse lunges, then several gentle practice jumps. No equipment. Use a clear, level, nonslip area with enough overhead space. Stop for pain. End a jumping set when height or landing control drops. This routine supports jumping power; practice new flips with your coach."
+    }
+  ]
+}

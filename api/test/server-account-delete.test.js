@@ -69,7 +69,7 @@ async function startServer(t, { users: which = ['admin', 'user'], env = {} } = {
 test('removes the account and everything attached to it, and ends the session', async t => {
   const h = await startServer(t);
   const res = await h.del(USER, { name: 'Mallory', current: GOOD });
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 200, h.log);
   assert.deepEqual(res.body, { ok: true });
   assert.match(res.cookie, /gymsid=;.*Max-Age=0/, 'the session cookie is cleared');
 

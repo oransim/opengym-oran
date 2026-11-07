@@ -1,7 +1,7 @@
 # openGym
 
 > Free, open-source gym & body-weight tracker (AGPL-3.0). Runs as a standalone
-> Android app (sideloaded APK) or self-hosted with Docker (passkey profiles,
+> Android app (sideloaded APK) or self-hosted with Docker (password accounts,
 > multi-device sync, PWA). No account required, no cloud, no telemetry.
 
 ## Docs

@@ -27,8 +27,8 @@ buildNpmPackage rec {
     mkdir -p $out/lib/opengym-api
     cp -r node_modules $out/lib/opengym-api/
     cp -r coach $out/lib/opengym-api/
-    # Every top-level module server.js imports: server.js, password.js, passkeys-store.js,
-    # rate-limit.js, media.js, device-link.js, push-messages.js, verify-error.js. Copy the
+    # Every top-level module server.js imports: server.js, password.js,
+    # rate-limit.js, media.js, push-messages.js, origin-hint.js. Copy the
     # glob rather than an explicit list — a hand-kept list silently ships an incomplete tree
     # and the failure only shows up as ERR_MODULE_NOT_FOUND in the systemd journal.
     cp ./*.js $out/lib/opengym-api/
@@ -41,7 +41,7 @@ buildNpmPackage rec {
   '';
 
   meta = with lib; {
-    description = "openGym API — passkey auth + per-user workout data (Node.js)";
+    description = "openGym API — password auth + per-user workout data (Node.js)";
     homepage = "https://gitlab.com/DuarteSantos8/opengym";
     license = licenses.agpl3Plus;
     platforms = nodejs.meta.platforms;

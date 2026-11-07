@@ -129,10 +129,9 @@ function ptab (rows) {
 
 const TAGS = {
   meta: { title: 'Meta', side: 'Health &amp; public config' },
-  auth: { title: 'Auth', side: 'Passkeys &amp; sessions' },
+  auth: { title: 'Auth', side: 'Accounts &amp; sessions' },
   pairing: { title: 'Pairing', side: 'Connect the mobile app' },
-  password: { title: 'Password', side: 'Optional name &amp; password (PASSWORD_LOGIN)' },
-  passkeys: { title: 'Passkeys', side: 'More passkeys &amp; device links' },
+  password: { title: 'Password', side: 'Sign-in and recovery' },
   data: { title: 'Data', side: 'State sync' },
   push: { title: 'Push', side: 'Notifications &amp; rest timer' },
   activity: { title: 'Activity', side: 'Live presence' },
@@ -386,7 +385,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 .ep[open] > summary .ep-chev { transform: rotate(225deg); }
 .ep-sum { grid-column: 2 / -1; color: var(--fg-3); font-size: 13.5px; line-height: 1.45; }
 .ep-body { border-top: 1px solid var(--hair-soft); padding: 16px 16px 18px; }
-/* WebAuthn type names run to 34 characters. On a phone they are wider than the
+/* Long schema names run to 34 characters. On a phone they are wider than the
    card, so every prose block in here is allowed to break inside a word. */
 .ep-body > p, .ep-body > ul li, .ov p, .ov li, .p-desc, .api-sec .sub, .ep-auth,
 .ep-path code, .sch-name code, .p-name, .p-type { overflow-wrap: break-word; }
@@ -479,12 +478,12 @@ const html = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>openGym: API</title>
-<meta name="description" content="The complete openGym HTTP API, documented as an OpenAPI spec: passkey auth, state sync, push notifications, pairing and admin routes.">
+<meta name="description" content="The complete openGym HTTP API, documented as an OpenAPI spec: password auth, state sync, push notifications, pairing and admin routes.">
 <meta name="theme-color" content="#000000">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="preconnect" href="https://stats.duarte-santos.ch">
 <meta property="og:title" content="openGym API reference">
-<meta property="og:description" content="The complete openGym HTTP API as an OpenAPI spec: passkey auth, state sync, push notifications, pairing and admin routes.">
+<meta property="og:description" content="The complete openGym HTTP API as an OpenAPI spec: password auth, state sync, push notifications, pairing and admin routes.">
 <meta property="og:image" content="https://opengym.ch/img/social.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -575,7 +574,7 @@ ${railTags}
 
 <main id="main" class="api-main">
   <h1>API</h1>
-  <p class="lead">Every route the openGym backend serves (passkey auth, state sync,
+  <p class="lead">Every route the openGym backend serves (password auth, state sync,
      push, pairing, admin) as one hand-written
      OpenAPI&nbsp;spec. The same file lives
      <a href="https://github.com/DuarteSantos8/openGym/blob/main/api/openapi.yaml" rel="noopener">in the repository</a>

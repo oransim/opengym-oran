@@ -4,7 +4,7 @@ flowchart TB
     subgraph host["Your server"]
         direction TB
         web["web<br/>nginx: serves the app<br/>and exercise media,<br/>proxies /api"]
-        api["api<br/>Node + WebAuthn"]
+        api["api<br/>Node + password auth"]
         data[("./data<br/>JSON files")]
         mcp["MCP server<br/>optional, read-only"]
     end

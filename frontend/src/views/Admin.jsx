@@ -12,7 +12,7 @@ import { Button } from '../components/ui.jsx'
 import AdminCoach from './AdminCoach.jsx'
 import '../admin.css'
 
-// Admin-only operator dashboard (owner passkey + admin flag; guarded again server-side).
+// Admin-only operator dashboard (admin flag; guarded again server-side).
 // Deliberately English-only — it isn't part of the translated end-user surface, so it stays
 // out of the per-language string packs.
 //
@@ -32,25 +32,12 @@ const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60
 
 // The one time the reset code is visible. Locked, so a tap beside the sheet cannot lose it
 // before it has been copied or written down.
-function ResetCodeSheet({ name, email, code, expires, close }) {
+function ResetCodeSheet({ name, code, expires, close }) {
   const toast = useUI(s => s.toast)
   const copy = () => { navigator.clipboard?.writeText(code).catch(() => {}); toast('Copied') }
   return <>
     <h3>Reset code for {name}</h3>
-    <div className="adm-lead">Give them this code. They choose “Sign in with password” → “Have a reset code from your admin?”, enter their name <b>{name}</b>{email && <> (or their sign-in e-mail <b>{email}</b>)</>}, the code and a new password. It works once, until {new Date(expires).toLocaleString()}, and will not be shown again.</div>
-    <button className="adm-code" style={{ fontSize: 22, width: '100%', padding: '14px 0' }} onClick={copy} aria-label="copy code">{code}</button>
-    <div style={{ height: 12 }} />
-    <Button variant="primary" onClick={close}>Done</Button>
-  </>
-}
-
-// The one time a recovery code (#584) is visible. Locked like the reset code's sheet.
-function RecoveryCodeSheet({ name, code, expires, close }) {
-  const toast = useUI(s => s.toast)
-  const copy = () => { navigator.clipboard?.writeText(code).catch(() => {}); toast('Copied') }
-  return <>
-    <h3>Recovery code for {name}</h3>
-    <div className="adm-lead">Give them this code. On the sign-in screen they tap “Lost access?” → “I have a code” (or “Use a code from your other device”) and enter it; the device they use gets a new passkey for <b>{name}</b> and is signed in. In the phone app they do this in a browser first, then pair the app again. It works once, until {new Date(expires).toLocaleString()}, and will not be shown again.</div>
+    <div className="adm-lead">Give them this code. On the sign-in page they choose “Have a reset code?”, enter their username <b>{name}</b>, the code and a new password. It works once, until {new Date(expires).toLocaleString()}, and will not be shown again.</div>
     <button className="adm-code" style={{ fontSize: 22, width: '100%', padding: '14px 0' }} onClick={copy} aria-label="copy code">{code}</button>
     <div style={{ height: 12 }} />
     <Button variant="primary" onClick={close}>Done</Button>
@@ -107,23 +94,11 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
   const pwInstance = typeof u.password === 'boolean'
   const resetPassword = () => confirmSheet({
     title: 'Reset ' + u.name + '’s password?',
-    message: 'You get a one-time code to hand them. Their current password stops working now and they are signed out everywhere; their passkeys keep working. They set a new password with the code under “Sign in with password”. It is shown once and is valid for 24 hours.',
+    message: 'You get a one-time code to hand them. Their current password stops working now and they are signed out everywhere. They set a new password with the code. It is shown once and is valid for 24 hours.',
     confirmText: 'Create reset code',
     danger: true,
     onConfirm: () => api('/api/admin/user/password-reset', { method: 'POST', body: JSON.stringify({ id: u.id }) })
-      .then(r => { onChanged(); close(); openSheet(done => <ResetCodeSheet name={r.name} email={u.email} code={r.code} expires={r.expires} close={done} />, { locked: true }) })
-      .catch(e => toast(e.message)),
-  })
-  // A recovery code (#584): any admin for a profile that is not an admin, the owner for an admin;
-  // the owner's own comes from the server command (recover.js). Not for oneself.
-  const canRecover = !u.owner && !u.disabled && u.id !== me?.id && (!u.admin || viewerOwner)
-  const makeRecovery = () => confirmSheet({
-    title: 'Recovery code for ' + u.name + '?',
-    message: 'For someone who lost every way in: their devices and passkey are gone, and they have no password. You get a one-time code to hand them; the device they enter it on gets a new passkey. They are signed out everywhere now. Their passkeys and password stay. It is shown once and is valid for 24 hours.',
-    confirmText: 'Create recovery code',
-    danger: true,
-    onConfirm: () => api('/api/admin/user/recovery', { method: 'POST', body: JSON.stringify({ id: u.id }) })
-      .then(r => { onChanged(); close(); openSheet(done => <RecoveryCodeSheet name={r.name} code={r.code} expires={r.expires} close={done} />, { locked: true }) })
+      .then(r => { onChanged(); close(); openSheet(done => <ResetCodeSheet name={r.name} code={r.code} expires={r.expires} close={done} />, { locked: true }) })
       .catch(e => toast(e.message)),
   })
   return <>
@@ -136,7 +111,6 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
       {/* The sign-in e-mail (password instances only): shown to admins and nobody else. */}
       {u.email && <span className="adm-pill" title="sign-in e-mail">{u.email}</span>}
       {u.resetUntil && <span className="adm-pill acc">reset code until {new Date(u.resetUntil).toLocaleString()}</span>}
-      {u.recoveryUntil && <span className="adm-pill acc">recovery code until {new Date(u.recoveryUntil).toLocaleString()}</span>}
       <span className="adm-pill">joined {u.created ? fmtDate(u.created.slice(0, 10)) : '–'}</span>
     </div>
     <div className="tiles" style={{ textAlign: 'start' }}>
@@ -170,7 +144,7 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
       <button className="btn danger" style={{ margin: '14px 0 4px' }}
         onClick={() => confirmSheet({
           title: 'Delete ' + u.name + '?',
-          message: 'Everything goes: their workouts, weigh-ins, routines, passkeys and notifications. This cannot be undone, and the invite code they joined with stays used. Download their data first if they might want it.',
+          message: 'Everything goes: their workouts, weigh-ins, routines and notifications. This cannot be undone, and the invite code they joined with stays used. Download their data first if they might want it.',
           confirmText: 'Continue',
           danger: true,
           onConfirm: () => confirmSheet({
@@ -187,14 +161,9 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
         <button className="btn" style={{ margin: '14px 0 4px' }} onClick={resetPassword}>Reset password</button>
         <div className="adm-hint">{u.password
           ? 'For a forgotten password: a one-time code lets them choose a new one. Their current password stops working at once.'
-          : 'No password yet. A one-time code lets them set one. That’s the way back in after losing their only passkey.'}</div>
+          : 'No password yet. A one-time code lets them set one.'}</div>
       </>}
     </>}
-    {canRecover && <>
-      <button className="btn" style={{ margin: '14px 0 4px' }} onClick={makeRecovery}>Recovery code</button>
-      <div className="adm-hint">Lost every device and passkey? A one-time code gives a new device a passkey for this profile. Works with or without password sign-in.</div>
-    </>}
-    {u.owner && u.id !== me?.id && <div className="adm-hint" style={{ marginTop: 14 }}>A locked-out owner gets a recovery code from the server itself: <code>docker compose exec api node recover.js "{u.name}"</code></div>}
     <h4 className="sec">Workout history</h4>
     {workouts.length ? <div className="list" style={{ gap: 0 }}>
       {workouts.slice(0, 60).map(w => <div key={w.id} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>

@@ -1,5 +1,5 @@
 # openGym — standalone web server: serves the static app AND proxies /api to the backend,
-# so the whole app lives on ONE origin (required for WebAuthn / passkeys).
+# so the whole app lives on ONE origin (required for browser session writes).
 
 # What the two /api blocks below forward: the request's own target, path and query exactly as
 # the client sent it, with BASE_PATH taken off the front. The API's routes are /api/... whatever

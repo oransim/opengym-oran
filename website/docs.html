@@ -114,7 +114,7 @@
   <div class="side-group">
     <a class="side-link" href="#selfhost"><b>Self-hosting</b></a>
     <div class="side-subs">
-      <a class="side-sub" href="#sh-passkey">The passkey rule</a>
+      <a class="side-sub" href="#sh-signin">Account sign-in</a>
       <a class="side-sub" href="#sh-https">HTTPS on your domain</a>
       <a class="side-sub" href="#sh-notify">Notifications</a>
       <a class="side-sub" href="#sh-stack">In an existing stack</a>
@@ -128,7 +128,7 @@
   <div class="side-group">
     <a class="side-link" href="#admin"><b>Admin &amp; multi-user</b></a>
     <div class="side-subs">
-      <a class="side-sub" href="#admin-signin">Passkeys &amp; passwords</a>
+      <a class="side-sub" href="#admin-signin">Passwords &amp; recovery</a>
       <a class="side-sub" href="#admin-log">The activity log</a>
     </div>
   </div>
@@ -168,7 +168,7 @@
   <div class="side-group">
     <a class="side-link" href="#troubleshoot"><b>Troubleshooting</b></a>
     <div class="side-subs">
-      <a class="side-sub" href="#tr-passkey">Passkeys fail</a>
+      <a class="side-sub" href="#tr-signin">Sign-in trouble</a>
       <a class="side-sub" href="#tr-rest">Everything else</a>
     </div>
   </div>
@@ -207,7 +207,7 @@
      section says otherwise.</p>
   <table class="cfg">
     <tr><td><b>Mobile app</b></td><td>The <a href="https://apps.apple.com/app/id6822275400" rel="noopener">App Store app</a> for iPhone (with the Apple Watch app) and the Android APK. No account, no server, no sync unless you want one: the phone <i>is</i> the account, data lives in the app's private storage, reminders are native notifications. Install and done, or <a href="#mobile-server">connect it to your server</a> later.</td></tr>
-    <tr><td><b>Self-hosted</b></td><td>Two Docker containers on your own machine. Adds passkey profiles, sync across devices, installable as a home-screen PWA, optional admin dashboard, web push notifications. The flavor for households and training groups.</td></tr>
+    <tr><td><b>Self-hosted</b></td><td>Two Docker containers on your own machine. Adds password accounts, sync across devices, installable as a home-screen PWA, optional admin dashboard, web push notifications. The flavor for households and training groups.</td></tr>
     <tr><td><b>Demo</b></td><td><a href="/demo/">The in-browser demo</a> — the real app seeded with example data, storing everything in your browser only. Useful to try before installing, and as a free plan editor (see <a href="#import">Import</a>).</td></tr>
   </table>
   <p>You can start with the mobile app and move to a server later (or the other way round) —
@@ -259,7 +259,7 @@
         is the same app.</li>
     <li><b>Self-host + home screen:</b> open your own openGym instance in Safari &rarr;
         <b>Share</b> &rarr; <b>Add to Home Screen</b>. A full-screen app with its own icon,
-        passkey sign-in and sync.</li>
+        password sign-in and sync.</li>
     <li><b>Build it yourself</b> (a fork, say): open <code>frontend/ios</code> in Xcode with a free
         Apple ID and run it on your phone (Apple expires that signature after 7 days). See
         <a href="https://github.com/DuarteSantos8/openGym/blob/main/docs/MOBILE.md" rel="noopener">docs/MOBILE.md</a>.</li>
@@ -509,20 +509,10 @@ curl http://localhost:8080/api/health      # {"ok":true,...}</code></pre>
      build from source instead of pulling: skip the <code>pull</code> and run
      <code>docker compose up -d --build</code> — no Node needed locally either way.</p>
 
-  <h3 id="sh-passkey">The passkey rule (read this before opening a port)</h3>
-  <p>openGym signs you in with <b>passkeys</b> (WebAuthn — Face ID, fingerprint, or your
-     password manager). Browsers enforce two rules: a passkey is bound to an exact
-     <b>hostname</b>, and it only works over <b>HTTPS</b> — with one exception,
-     <code>http://localhost</code>.</p>
-  <p>So <code>http://localhost:8080</code> works on the Docker machine, but your phone
-     <b>cannot</b> use <code>http://192.168.x.x:8080</code> — that's neither localhost nor
-     HTTPS, and the passkey prompt won't appear. To use openGym from your phone you need a
-     real HTTPS hostname (below). Until then, LAN devices can still use <b>guest mode</b>
-     (data stays in that browser), <a href="#admin-signin">password sign-in</a>
-     (<code>PASSWORD_LOGIN=1</code>) or the <a href="#mobile-server">mobile app's pairing
-     mode</a>. No fingerprint reader on your laptop is a different story and needs none of
-     that: a passkey can sit on your phone (scan the browser's QR code), in a password manager
-     or on a security key.</p>
+  <h3 id="sh-signin">Account sign-in</h3>
+  <p>Open the site and choose <b>Create account</b>. Each person uses a username,
+     password and recovery email. The sign-in page also has <b>Forgot password?</b>,
+     which sends a link to choose a new password.</p>
 
   <h3 id="sh-https">HTTPS on your own domain</h3>
   <p>Put anything that terminates TLS in front of the <code>web</code> container. Pick
@@ -536,20 +526,16 @@ curl http://localhost:8080/api/health      # {"ok":true,...}</code></pre>
     <li><b>Tailscale Serve</b> (no domain, nothing on the internet):
         <code>tailscale serve --bg http://127.0.0.1:8080</code> gives the host a
         <code>https://&lt;name&gt;.&lt;tailnet&gt;.ts.net</code> address with a real certificate;
-        use that name as <code>RP_ID</code>/<code>ORIGIN</code>. Phones need the Tailscale app.
+        use that address as <code>ORIGIN</code>. Phones need the Tailscale app.
         Steps in <a href="https://github.com/DuarteSantos8/openGym/blob/main/docs/SELF_HOSTING.md#option-d--tailscale-serve-no-domain-nothing-on-the-internet" rel="noopener">SELF_HOSTING.md</a>.</li>
   </ul>
   <p>Then set the domain in <code>.env</code> and apply it:</p>
   <pre><code># .env
-RP_ID=gym.example.com
 ORIGIN=https://gym.example.com
 
 docker compose up -d   # restart alone does NOT re-read .env</code></pre>
   <p>Visit your domain, create your profile, add it to the home screen (iOS: Share → Add to
      Home Screen · Android: ⋮ → Add to Home screen).</p>
-  <div class="note">Changing <code>RP_ID</code> later invalidates existing passkeys — they
-    were bound to the old hostname, and everyone registers again. Settle the domain before
-    people join.</div>
   <p>Want a valid certificate <b>without</b> exposing anything to the internet — HTTPS on a
      LAN-only address? That works too (wildcard cert via a DNS challenge, Caddy in front):
      <a href="https://github.com/DuarteSantos8/openGym/blob/main/docs/SELF_HOSTING_HTTPS.md" rel="noopener">docs/SELF_HOSTING_HTTPS.md</a>.
@@ -608,7 +594,6 @@ location /gym/ {
 
 # .env
 BASE_PATH=/gym
-RP_ID=example.com
 ORIGIN=https://example.com          # no /gym here</code></pre>
   <p>Prefer <code>proxy_pass http://127.0.0.1:8080/;</code> (trailing slash, prefix stripped)?
      Then leave <code>BASE_PATH</code> empty and add <code>proxy_redirect / /gym/;</code>.
@@ -625,10 +610,10 @@ ORIGIN=https://example.com          # no /gym here</code></pre>
      volume and <code>env_file</code> (for example <code>/share/Container/opengym/.env</code>), because
      the NAS's compose UI keeps the file in a folder of its own. <b>Set <code>ORIGIN</code> to the
      exact address you type</b>, port included (<code>ORIGIN=http://10.11.0.4:3030</code>,
-     <code>RP_ID=10.11.0.4</code>), then recreate the stack; otherwise every save is refused and the
+     <code>ORIGIN=http://10.11.0.4:3030</code>), then recreate the stack; otherwise every save is refused and the
      API log's <code>refused cross-origin</code> line names the values to set. <b>Add HTTPS</b>
      through the NAS's reverse proxy (Synology Login Portal, QNAP Reverse Proxy, Nginx Proxy
-     Manager or Caddy on Unraid and TrueNAS) for passkeys. The <code>api</code> container runs as
+     Manager or Caddy on Unraid and TrueNAS). The <code>api</code> container runs as
      root and writes <code>data/</code>, so an NFS share with root squash needs a different owner.
      The full walkthrough with a compose file to paste is in
      <a href="https://github.com/DuarteSantos8/openGym/blob/main/docs/SELF_HOSTING.md#on-a-nas-synology-qnap-unraid-truenas" rel="noopener">SELF_HOSTING.md</a>.</p>
@@ -650,9 +635,7 @@ docker compose up -d</code></pre>
   <p>All configuration is one <code>.env</code> file (see <code>.env.example</code>); the
      defaults are what you get if you touch nothing.</p>
   <table class="cfg">
-    <tr><td><code>RP_ID</code></td><td>Hostname passkeys are bound to. A <b>bare hostname</b>: no scheme, no port, no slash. Default <code>localhost</code>.</td></tr>
     <tr><td><code>ORIGIN</code></td><td>Full URL the app is served from — <i>with</i> scheme, <i>without</i> trailing slash. Must match the address bar exactly. Default <code>http://localhost:8080</code>.</td></tr>
-    <tr><td><code>RP_NAME</code></td><td>Name shown in the passkey prompt. Default <code>openGym</code>.</td></tr>
     <tr><td><code>WEB_PORT</code></td><td>Host port for the web UI. Default <code>8080</code>.</td></tr>
     <tr><td><code>NGINX_PORT</code></td><td>Port the web container listens on, inside the container. Default <code>80</code>.</td></tr>
     <tr><td><code>BACKEND</code></td><td>Name of the API service <code>/api</code> is proxied to — change it if yours isn't called <code>api</code>.</td></tr>
@@ -666,7 +649,6 @@ docker compose up -d</code></pre>
     <tr><td><code>AUDIT_MAX</code></td><td>Events kept in the activity log; <code>0</code> for no limit. Default <code>5000</code>.</td></tr>
     <tr><td><code>AUDIT_DAYS</code></td><td>Days kept in the activity log; <code>0</code> to keep until <code>AUDIT_MAX</code>. Default <code>90</code>.</td></tr>
     <tr><td><code>AUDIT_IP</code></td><td>Record the caller's address: <code>off</code>, <code>net</code> (network only, e.g. <code>203.0.113.0/24</code>) or <code>full</code>. Default <code>off</code>.</td></tr>
-    <tr><td><code>PASSWORD_LOGIN</code></td><td>Set <code>1</code> to offer <a href="#admin-signin">name-and-password sign-in</a> next to passkeys. Default: off.</td></tr>
     <tr><td><code>TRUST_PROXY</code></td><td>Let the sign-in throttle read the visitor's address from proxy headers. <code>1</code> in <code>docker-compose.yml</code>, where the web container is the only way to the API; leave it off if you run the API without it.</td></tr>
     <tr><td><code>DEFAULT_LANG</code></td><td>Language of the sign-in screen and of new profiles, e.g. <code>de</code> or <code>pt-BR</code>. Default: the visitor's browser language.</td></tr>
     <tr><td><code>BASE_PATH</code></td><td>Serve openGym under a subpath such as <code>/gym</code>, no trailing slash, when your proxy passes that prefix through. A proxy that strips it needs this empty. Default: the site root. See <a href="#sh-stack">existing stack</a>.</td></tr>
@@ -700,23 +682,14 @@ ALLOW_GUEST=0              # remove "Continue without account"</code></pre>
      Coach</a> is switched on): who's
      training right now, each user's workout history and body weight, disabling an account
      (signed out and locked out everywhere until re-enabled), and — with invite-only on —
-     generating and revoking invite codes. Admin access rides on your passkey and is enforced
+     generating and revoking invite codes. Admin access rides on your account session and is enforced
      server-side; there is no separate admin login.</p>
-  <h3 id="admin-signin">Signing in: passkeys, more devices, passwords</h3>
-  <p>A profile can hold up to 20 passkeys &mdash; one per phone, laptop or password manager &mdash;
-     listed in Settings &rarr; Account. A new device without a synced passkey joins with a
-     one-time code or QR from a device that is already signed in. <b>Sign out everywhere</b>
-     ends every session and unpairs phones at once.</p>
-  <p>For people who can't use passkeys (a plain <code>http://</code> LAN address, a browser that
-     only offers a hardware key) an instance can switch on name-and-password sign-in with
-     <code>PASSWORD_LOGIN=1</code>. It is off by default; nobody has a password until they set
-     one in Settings, the sign-in routes are throttled, and an admin can hand out a one-time
-     reset code. The details are in
-     <a href="https://github.com/DuarteSantos8/openGym/blob/main/docs/SELF_HOSTING.md#password-sign-in-optional" rel="noopener">SELF_HOSTING.md</a>.</p>
-  <p><code>INVITE_ONLY</code> and <code>ALLOW_GUEST</code> answer different questions and are
-     usually set together: invite-only controls who may <i>create a profile</i>; the guest
-     button never creates one — guest mode keeps everything in that browser and never talks
-     to the server at all.</p>
+  <h3 id="admin-signin">Signing in and account recovery</h3>
+  <p>Each profile signs in with its username and password. A recovery email lets
+     its owner reset the password. An admin can also issue a one-time reset code.
+     <b>Sign out everywhere</b> ends every session and unpairs phones.</p>
+  <p><code>INVITE_ONLY</code> controls who may create an account; guest mode keeps
+     data in one browser and does not use the server.</p>
   <h3 id="admin-log">The activity log</h3>
   <p>The dashboard keeps an activity log: sign-ins, sign-outs, failed attempts, refused
      signups, and every admin action. It lives in <code>./data/audit.log</code> as one JSON
@@ -724,8 +697,7 @@ ALLOW_GUEST=0              # remove "Continue without account"</code></pre>
      dashboard reads the same file. On by default, keeping the last 5,000 events or 90 days,
      whichever comes first.</p>
   <p>What it deliberately does <b>not</b> record: IP addresses (unless you opt in via
-     <code>AUDIT_IP</code>), browser user-agents (a fingerprint), and the passkey id of a
-     failed sign-in (it would let you follow an unknown device between attempts). Guests
+     <code>AUDIT_IP</code>), browser user-agents or passwords. Guests
      never appear — nothing they do touches the server. Clearing the log records the clear
      itself, and event ids keep counting, so a gap is always visible.</p>
 
@@ -734,11 +706,10 @@ ALLOW_GUEST=0              # remove "Continue without account"</code></pre>
      your self-hosted instance</b> — your data then lives there, synced like the browser PWA.
      Same app, not a different download; offered on first launch and under Settings → Account →
      <b>Connect to my server</b>.</p>
-  <p>Passkeys can't work inside the app's WebView (it never runs at your real hostname), so
-     the device is <b>paired</b> instead:</p>
+  <p>The mobile app is <b>paired</b> with a one-time code:</p>
   <ol>
     <li>In a browser that's already signed in: Settings &rarr; Account &rarr; <b>Pair the mobile app</b>.
-        Confirm it's you (your passkey, or your password where password sign-in is on), and it
+        Confirm with your password, and it
         shows a one-time code, valid 5 minutes.</li>
     <li>In the app: enter your server's address and that code. Done.</li>
   </ol>
@@ -770,7 +741,7 @@ ALLOW_GUEST=0              # remove "Continue without account"</code></pre>
   <ol>
     <li>The server builds a JSON payload from a <b>by-name allowlist</b>: your plan, the sets
         you logged in the review window, weigh-ins, your intake answers, and a few preferences —
-        under a pseudonym. Your name, e-mail, passkeys and everyone else's data are not in it,
+        under a pseudonym. Your name, e-mail and everyone else's data are not in it,
         by construction: fields are copied in one by one, nothing is passed through.</li>
     <li>That payload goes to the provider <b>you</b> configured — there is no openGym service in
         the middle.</li>
@@ -867,7 +838,7 @@ ALLOW_GUEST=0              # remove "Continue without account"</code></pre>
   </table>
   <p>It is <b>not part of the Docker build</b> — if you don't use an AI assistant, it simply
      isn't there. No new auth (the filesystem is the boundary), no telemetry, no network; the
-     LLM never sees passkeys or session secrets. Setup is <code>cd mcp &amp;&amp; npm
+     LLM never sees passwords or session secrets. Setup is <code>cd mcp &amp;&amp; npm
      install</code> plus a few lines of client config:
      <a href="https://github.com/DuarteSantos8/openGym/blob/main/mcp/README.md" rel="noopener">mcp/README.md</a>.</p>
 
@@ -928,14 +899,14 @@ Leg Day,Leg Press,2026-08-21,200,1</code></pre>
   <h3>Per instance (self-hosted)</h3>
   <p>Everything lives in <code>./data</code> on your host:</p>
   <table class="cfg">
-    <tr><td><code>db.json</code></td><td>Profiles and <b>public</b> passkeys. Private keys never touch the server — they stay in your phone's secure hardware or password manager.</td></tr>
+    <tr><td><code>db.json</code></td><td>Profiles, password hashes, and account metadata.</td></tr>
     <tr><td><code>state-&lt;user&gt;.json</code></td><td>One file per user: plan, workouts, body weight, settings.</td></tr>
     <tr><td><code>audit.log</code></td><td>The activity log (if on) — one JSON object per line.</td></tr>
     <tr><td><code>secret</code></td><td>The session-cookie signing key.</td></tr>
     <tr><td><code>vapid.json</code></td><td>Push-notification keys, generated on first run.</td></tr>
   </table>
   <pre><code>tar czf opengym-backup-$(date +%F).tar.gz data/</code></pre>
-  <p>That archive is everything — profiles, passkeys, history. It also contains
+  <p>That archive is everything — profiles and history. It also contains
      <code>audit.log</code> with everyone's sign-in times; worth knowing before shipping it
      to a backup service you don't run. Restore by unpacking into the project folder.</p>
 
@@ -946,10 +917,10 @@ Leg Day,Leg Press,2026-08-21,200,1</code></pre>
         <i>inside Docker</i>. The app ships no runtime dependencies beyond React, the router
         and Zustand.</li>
     <li><b>api/</b> — Node with <b>no framework</b> and two dependencies
-        (<code>@simplewebauthn/server</code> for passkeys, <code>web-push</code> for
+        (<code>web-push</code> for
         notifications), storing everything as plain JSON files under <code>./data</code>.</li>
     <li><b>web/</b> — a multi-stage image that builds the frontend and serves it with nginx,
-        proxying <code>/api</code> to the backend so it's all on <b>one origin</b> (passkeys
+        proxying <code>/api</code> to the backend so it's all on <b>one origin</b> (browser writes
         require this).</li>
   </ul>
   <p>The training logic — progression rules, 1RM estimation, how a logged session is read
@@ -991,32 +962,14 @@ Leg Day,Leg Press,2026-08-21,200,1</code></pre>
   </ul>
 
   <h2 id="troubleshoot">Troubleshooting</h2>
-  <h3 id="tr-passkey">Passkeys fail even though the config looks right</h3>
-  <p>The most common support question — work through these in order:</p>
-  <ol>
-    <li><b>Ask the server what it actually loaded:</b>
-        <code>docker compose logs api | grep 'gym-api on'</code> prints the
-        <code>rpID</code>/<code>origin</code> it runs with. If that disagrees with your
-        <code>.env</code>: <code>docker compose restart</code> does <b>not</b> re-read
-        <code>.env</code> — use <code>docker compose up -d</code>.</li>
-    <li><b>Check the exact shape:</b> <code>RP_ID</code> is a bare hostname
-        (<code>gym.example.com</code> — no <code>https://</code>, no port, no slash);
-        <code>ORIGIN</code> is the full origin with scheme and without trailing slash. Both
-        must match the address bar exactly.</li>
-    <li><b>Behind a tunnel/proxy, use the public hostname</b> — never the container name,
-        LAN IP or internal port. The tunnel's own route may point wherever it likes.</li>
-    <li><b><code>www.</code> is a different host.</b> A passkey registered on
-        <code>gym.example.com</code> won't work on <code>www.gym.example.com</code> — pick
-        one, redirect the other.</li>
-    <li><b>Changing the hostname invalidates existing passkeys.</b> Everyone registers
-        again.</li>
-  </ol>
+  <h3 id="tr-signin">Sign-in or reset link trouble</h3>
+  <p>Check that the API is running and that <code>ORIGIN</code> matches the address
+     in the browser. Password reset also needs a configured SMTP sender and a
+     recovery email on the profile.</p>
   <h3 id="tr-rest">Everything else</h3>
   <table class="cfg">
-    <tr><td>No passkey prompt on my phone</td><td>You're on <code>http://</code> or a bare IP. Passkeys need HTTPS or localhost — set up a domain, or use guest mode / the mobile app.</td></tr>
-    <tr><td>"This server only takes changes made at ..."</td><td><code>ORIGIN</code> isn't the address in your browser. <code>docker compose logs api</code> shows a <code>refused cross-origin</code> line naming the <code>ORIGIN=</code> and <code>RP_ID=</code> to set; then <code>docker compose up -d</code>.</td></tr>
+    <tr><td>"This server only takes changes made at ..."</td><td><code>ORIGIN</code> isn't the address in your browser. <code>docker compose logs api</code> shows a <code>refused cross-origin</code> line naming the <code>ORIGIN=</code> to set; then <code>docker compose up -d</code>.</td></tr>
     <tr><td>Sign-in never works, only "Continue without account"</td><td>The <code>api</code> container isn't running or <code>web</code> can't reach it (<code>BACKEND</code>, <code>PORT</code>). As a guest nothing is saved on the server.</td></tr>
-    <tr><td>"verification failed" on login</td><td><code>RP_ID</code>/<code>ORIGIN</code> don't match the address bar — see the checklist above, starting with what the server logged.</td></tr>
     <tr><td>Exercise pictures missing</td><td>You're on an image older than v1.4.0 or a custom build: <code>docker compose pull &amp;&amp; docker compose up -d</code>. A source build needs <code>catalogue/media/</code> checked out.</td></tr>
     <tr><td>Port 8080 already used</td><td><code>WEB_PORT=9090</code> in <code>.env</code> (and update <code>ORIGIN</code> for local testing).</td></tr>
     <tr><td>No "Reminders" page in Settings</td><td>Needs a signed-in profile and HTTPS (or localhost) — guest mode and plain HTTP over LAN can't subscribe.</td></tr>
@@ -1040,10 +993,8 @@ Leg Day,Leg Press,2026-08-21,200,1</code></pre>
         reminder's map and address search, which ask OpenStreetMap) and, in the
         APK from this site, for GitHub's public release list when you open Settings → About (the
         update check). The full policy: <a href="privacy.html">Privacy</a>. In the browser, a self-hosted instance talks only to your own server.</li>
-    <li><b>Passkey private keys never leave your device</b> — the server stores only public
-        keys.</li>
     <li><b>The optional activity log</b> (self-hosted, admin feature) records sign-in events
-        but no IP addresses, user-agents or failed-attempt passkey ids unless the operator
+        but no IP addresses or user-agents unless the operator
         opts in — <a href="#admin-log">details above</a>.</li>
     <li><b>The AI Coach is opt-in twice over</b> — an admin has to enable it, and a consent
         screen lists exactly which data categories leave the server before anyone uses it.
@@ -1074,24 +1025,8 @@ Leg Day,Leg Press,2026-08-21,200,1</code></pre>
   <p>The easy way is the <a href="https://apps.apple.com/app/id6822275400" rel="noopener">App Store app</a>,
      on its own or connected to your server. Or as a web app: open your openGym address (it has to be
      <code>https://</code>) in <b>Safari</b>, tap <b>Share → Add to Home Screen</b>, open the new icon
-     and create your profile; Face ID makes the passkey. It runs full screen, works offline and can
+     and create your profile with a password. It runs full screen, works offline and can
      send notifications from there. Just curious? The <a href="/demo/">demo</a> works in Safari too.</p>
-  <h3>Passkeys don't work on plain http, or my laptop has no fingerprint reader.</h3>
-  <p>Browsers only do passkeys over HTTPS (and on <code>http://localhost</code>), so
-     <code>http://ip:port</code> never gets a passkey prompt, whatever you set. Put HTTPS in
-     front (<a href="#sh-https">see above</a>, Tailscale Serve included, or a LAN certificate via
-     <a href="https://github.com/DuarteSantos8/openGym/blob/main/docs/SELF_HOSTING_HTTPS.md" rel="noopener">SELF_HOSTING_HTTPS.md</a>).
-     A fingerprint reader is not required: any passkey works, from your phone via the browser's
-     QR code, a password manager, a security key or a Windows Hello PIN. Or switch on passwords
-     with <code>PASSWORD_LOGIN=1</code> in <code>.env</code> and <code>docker compose up -d</code>:
-     the sign-in screen then offers <b>Sign in with password</b> and new profiles can use one.</p>
-  <h3>Can I use a password instead of a passkey?</h3>
-  <p>Yes, if the instance allows it: <code>PASSWORD_LOGIN=1</code> in <code>.env</code>, then
-     <code>docker compose up -d</code>. Off by default. The sign-in screen gets <b>Sign in with
-     password</b> (profile name or sign-in e-mail), new profiles can use one, and a passkey profile
-     adds one under <b>Settings → Account → Password</b>. openGym never sends mail, so a forgotten
-     password is reset with a one-time code from the admin dashboard. Switching it off later locks
-     out profiles that only have a password. <a href="#admin-signin">More on signing in</a>.</p>
   <h3>What is guest mode, and can I turn it off?</h3>
   <p><b>Continue without account</b> keeps everything in that browser: no profile, no sync,
      nothing on the server. Make a profile on the same device later and the data moves in. For an
