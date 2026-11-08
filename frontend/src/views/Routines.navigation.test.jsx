@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Routines from './Routines.jsx'
+import RoutineCatalog from './RoutineCatalog.jsx'
 import { DEF, useStore } from '../store/useStore.js'
 import catalog from '../lib/routine-catalog.json'
 
@@ -30,6 +31,7 @@ beforeEach(() => {
   root = createRoot(host)
   router = createMemoryRouter([
     { path: '/routines', element: <Routines /> },
+    { path: '/routines/catalog', element: <RoutineCatalog /> },
     { path: '/routines/r/:id', element: <div>Routine editor</div> },
   ], { initialEntries: ['/routines'] })
   act(() => root.render(<RouterProvider router={router} />))
@@ -43,6 +45,11 @@ afterEach(() => {
 const button = label => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === label)
 
 describe('Routines root view', () => {
+  it('opens the catalog without listing every bundled entry on the personal screen', async () => {
+    expect(host.textContent).not.toContain('Side split routine')
+    await act(async () => button('Browse library').click())
+    expect(router.state.location.pathname).toBe('/routines/catalog')
+  })
   it('shows routines and classes in separate lists, excluding repeat exercises', () => {
     expect(host.textContent).toContain('Push')
     expect(host.textContent).not.toContain('Yoga')
@@ -61,20 +68,49 @@ describe('Routines root view', () => {
     expect(router.state.location.pathname).toBe(`/routines/r/${made.id}`)
   })
 
-  it('offers bundled routines and classes as copies without changing current routines', async () => {
+  it('offers bundled routines and classes on a separate screen as copies', async () => {
     expect(catalog.routines.filter(r => r.kind === 'visit').map(r => r.name)).toEqual(['yoga', 'Pilates', 'tricking', 'climbing', 'functional'])
+    await act(async () => button('Browse library').click())
     expect(host.textContent).toContain('Side split routine')
-    expect(host.textContent).toContain('climbing')
-    expect(host.textContent).toContain('Pilates')
-    expect(host.textContent).toContain('functional')
     await act(async () => button('Add to my routines').click())
     expect(useStore.getState().S.routines.find(r => r.name === 'Push')).toBeTruthy()
     expect(useStore.getState().S.routines.find(r => r.name === 'Side split routine')?.id).not.toBe('flex-24e03a58582c')
+    act(() => button('Classes').click())
+    expect(host.textContent).toContain('climbing')
+    expect(host.textContent).not.toContain('Side split routine')
     await act(async () => button('Add to my classes').click())
     expect(useStore.getState().S.routines.some(r => r.kind === 'visit' && r.name === 'yoga')).toBe(true)
   })
 
+  it('filters the catalog by name and returns to personal routines', async () => {
+    await act(async () => button('Browse library').click())
+    const search = host.querySelector('input[placeholder="Search…"]')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'pancake')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(host.textContent).toContain('Pancake split routine')
+    expect(host.textContent).not.toContain('Side split routine')
+    await act(async () => button('My routines').click())
+    expect(router.state.location.pathname).toBe('/routines')
+  })
+
+  it('shows a manageable first page when the catalog grows', async () => {
+    const extra = Array.from({ length: 50 }, (_, i) => ({ id: `test-${i}`, name: `Added routine ${i}`, ex: [] }))
+    catalog.routines.push(...extra)
+    try {
+      await act(async () => button('Browse library').click())
+      expect(host.textContent).toContain('Added routine 0')
+      expect(host.textContent).not.toContain('Added routine 49')
+      await act(async () => button('Show more').click())
+      expect(host.textContent).toContain('Added routine 49')
+    } finally {
+      catalog.routines.splice(-extra.length)
+    }
+  })
+
   it('brings along the bundled custom exercise used by Tricking power', async () => {
+    await act(async () => button('Browse library').click())
     const add = [...host.querySelectorAll('button')].filter(b => b.textContent === 'Add to my routines')
     await act(async () => add.at(-2).click())
     const state = useStore.getState().S

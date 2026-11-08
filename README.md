@@ -10,6 +10,12 @@ A personal, self-hosted fitness tracker for workouts and gym or class visits. Th
 - Start and end a fast, see its elapsed time, and review completed fasts in history.
 - Keep exercises, custom photos, video URLs, routines, workouts, and history from openGym.
 
+## Add routines and classes to the built-in library
+
+Edit [`frontend/src/lib/routine-catalog.json`](frontend/src/lib/routine-catalog.json). Add a new object to `routines` with a unique, stable `id`, a `name`, an `emoji` glyph, and an `ex` array. A workout class or gym visit uses `"kind": "visit"` and typically has `"ex": []`. An exercise routine omits `kind`; each item in `ex` refers to an exercise ID from the exercise catalogue and includes its planned sets and reps or duration. If a routine needs a custom exercise, add it to the catalog's `customEx` array and reference its ID in `ex`.
+
+The Routines screen links to the searchable library. Selecting an entry adds a new copy to the user's routines or classes, with fresh IDs and any referenced custom exercises. Changing a built-in entry later does not overwrite copies users have already added.
+
 The phone experience is the web app: open your HTTPS address in a browser and add it to the home screen. No separate mobile app or app-store release is needed for this setup.
 
 ## Run locally

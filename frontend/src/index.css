@@ -2203,6 +2203,12 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .plan-handle:active{cursor:grabbing;color:var(--label-2)}
 .plan [data-reorder-row]{transition:transform var(--fast) var(--ease)}
 .plan-link{margin-top:24px}
+.routine-catalog-link{margin-top:24px}
+.routine-catalog .searchf{margin-bottom:14px}
+.routine-catalog-results .item{flex-wrap:wrap;gap:12px}
+.routine-catalog-results .grow{min-width:180px}
+.routine-catalog-results .btn{margin-inline-start:auto}
+.routine-catalog-more{margin-top:14px}
 .plan-empty{padding:28px 20px}
 /* Stats: the card Plan links to clears the sticky banners when it is scrolled to */
 #weekly-volume{scroll-margin-top:calc(var(--sat) + var(--conn) + 96px)}
