@@ -24,6 +24,16 @@ const stored = () => ({
   deleted: { workouts: { w9: NOW - 4000 } }, edited: { restSec: NOW - 4000 },
 });
 
+test('monthly rules are stamped separately for each routine', () => {
+  const cur = stored();
+  cur.monthly = { r1: { type: 'date', day: 5 }, r2: { type: 'date', day: 10 } };
+  const next = clone(cur);
+  next.monthly.r1 = { type: 'date', day: 12 };
+  stampPut(cur, next, { overRead: true, stamped: false, now: NOW });
+  assert.ok(next.edited['monthly.r1'] >= NOW);
+  assert.equal(next.edited['monthly.r2'], undefined);
+});
+
 test('an older app\'s push over the current revision keeps the records and gets its changes stamped', () => {
   const cur = stored();
   const next = clone(cur);
