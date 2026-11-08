@@ -1,4 +1,5 @@
 import { exOr } from './exercises.js'
+import { monthlyIdsOn } from './monthly-schedule.js'
 
 export const isExerciseRepeat = r => r?.kind === 'exercise-repeat'
 
@@ -16,7 +17,7 @@ export function makeExerciseRepeat(exId, config, id) {
 export function exerciseRepeatsOn(S, iso) {
   if (S?.dayPlan?.[iso] === 'rest') return []
   const day = new Date(`${iso}T12:00:00`).getDay()
-  const ids = [].concat(S?.week?.[day] || [])
+  const ids = [...new Set([...[].concat(S?.week?.[day] || []), ...monthlyIdsOn(S, iso)])]
   return ids.map(id => (S?.routines || []).find(r => r?.id === id && isExerciseRepeat(r)))
     .filter(r => r && !S?.dayPlanSkip?.[iso]?.includes(r.id))
 }

@@ -702,7 +702,7 @@ const OWN_MERGE = new Set([
   'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'stackWeights', 'dayNotes', 'dayPhotos', 'fasts',
 ])
 // Stamped per key instead of whole: one day of the plan, one exercise's note or bar.
-const PER_KEY = new Set(['week', 'dayPlan', 'dayPlanSkip', 'exNotes', 'barWeights', 'exAliases'])
+const PER_KEY = new Set(['week', 'monthly', 'dayPlan', 'dayPlanSkip', 'exNotes', 'barWeights', 'exAliases'])
 // The order of the routines, as the list shows them, is a choice of its own (`edited.routineOrder`):
 // a reorder on one device was lost to the other's whole copy whenever that one was newer.
 export const ORDER_KEY = 'routineOrder'
@@ -1221,7 +1221,7 @@ export function localExtras(local, server) {
     list(local?.measurements).filter(e => e && e.d != null && !measured.has(e.d)).length +
     Object.entries(isMap(local?.dayNotes) ? local.dayNotes : {}).filter(([k, v]) => readNote(v) && !readNote(server?.dayNotes?.[k])).length +
     Object.entries(isMap(local?.fasts) ? local.fasts : {}).filter(([k, v]) => v && !v.deleted && !(isMap(server?.fasts) && k in server.fasts)).length +
-    keysNew('week') + keysNew('dayPlan') + keysNew('dayPlanSkip') + keysNew('exNotes') + keysNew('exAliases')
+    keysNew('week') + keysNew('monthly') + keysNew('dayPlan') + keysNew('dayPlanSkip') + keysNew('exNotes') + keysNew('exAliases')
   return {
     workouts: list(local?.workouts).filter(w => !have.has(workoutKey(w))).length,
     bodyweight: list(local?.bodyweight).filter(e => e && e.d != null && (!days.has(e.d) || differs(e, days.get(e.d)))).length,

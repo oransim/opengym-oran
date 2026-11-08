@@ -2560,9 +2560,16 @@ const setScheduledDays = (st, id, days) => {
   }
 }
 
-function ScheduleDays({ routineId, exId, config, initialDay, close }) {
+function ScheduleDays({ routineId, exId, config, initialDay, initialIso, close }) {
   const st = useStore(s => s.S)
   const existing = st.routines.find(r => r.id === routineId)
+  const savedMonthly = st.monthly?.[routineId]
+  const [frequency, setFrequency] = useState(savedMonthly ? 'monthly' : 'weekly')
+  const initialDate = new Date(`${initialIso || todayISO()}T12:00:00`)
+  const [monthlyType, setMonthlyType] = useState(savedMonthly?.type || 'date')
+  const [monthDay, setMonthDay] = useState(savedMonthly?.day || initialDate.getDate())
+  const [ordinal, setOrdinal] = useState(savedMonthly?.ordinal || (initialDate.getDate() > 28 ? -1 : Math.ceil(initialDate.getDate() / 7)))
+  const [monthWeekday, setMonthWeekday] = useState(savedMonthly?.weekday ?? initialDate.getDay())
   const [days, setDays] = useState(() => {
     const saved = routineId ? scheduledDaysOf(st, routineId) : []
     return saved.length ? saved : Number.isInteger(initialDay) ? [initialDay] : []
@@ -2571,7 +2578,7 @@ function ScheduleDays({ routineId, exId, config, initialDay, close }) {
   const repeat = !!exId || isExerciseRepeat(existing)
   const id = exId || existing?.ex?.[0]?.id
   const save = () => {
-    if (!days.length) return
+    if (frequency === 'weekly' && !days.length) return
     update(s => {
       const rid = routineId || uid()
       if (!routineId) s.routines.push(makeExerciseRepeat(id, target, rid))
@@ -2579,7 +2586,11 @@ function ScheduleDays({ routineId, exId, config, initialDay, close }) {
         const r = s.routines.find(x => x.id === rid)
         if (r) r.ex[0] = { ...target, id }
       }
-      setScheduledDays(s, rid, days)
+      setScheduledDays(s, rid, frequency === 'weekly' ? days : [])
+      s.monthly ||= {}
+      if (frequency === 'monthly') s.monthly[rid] = monthlyType === 'date' ? { type: 'date', day: Number(monthDay) }
+        : monthlyType === 'last' ? { type: 'last' } : { type: 'weekday', ordinal: Number(ordinal), weekday: Number(monthWeekday) }
+      else delete s.monthly[rid]
     })
     close()
   }
@@ -2594,24 +2605,43 @@ function ScheduleDays({ routineId, exId, config, initialDay, close }) {
   if (!existing && !exId) return null
   return <>
     <h3>{existing?.name || t('Schedule exercise')}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{t('Choose the days to repeat every week.')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{frequency === 'weekly' ? t('Choose the days to repeat every week.') : t('Choose when this repeats every month.')}</div>
+    <div className="chips" style={{ marginBottom: 12 }}>
+      {[['weekly', t('Every week')], ['monthly', t('Every month')]].map(([value, label]) =>
+        <button key={value} type="button" className={'chip' + (frequency === value ? ' on' : '')} aria-pressed={frequency === value} onClick={() => setFrequency(value)}>{label}</button>)}
+    </div>
     {repeat && <div className="item" {...tappable(editTarget)}>
       <span className="lrow-i"><Icon name="pencil" /></span><div className="grow"><div className="tt">{t('Exercise target')}</div>
         <div className="ss">{target?.sets || 1} × {target?.mode === 'time' ? `${target?.sec || 45}s` : target?.reps || target?.min || 10}</div></div>
       <Icon name="chevronRight" className="chev" />
     </div>}
-    <div className="chips plan-weekday-chips" style={{ margin: '14px 0' }}>
+    {frequency === 'weekly' ? <div className="chips plan-weekday-chips" style={{ margin: '14px 0' }}>
       {weekOrder(weekStartOf(st)).map(d => <button key={d} type="button" className={'chip' + (days.includes(d) ? ' on' : '')}
         aria-label={t(DAYN[d])} aria-pressed={days.includes(d)} onClick={() => setDays(list => list.includes(d) ? list.filter(x => x !== d) : [...list, d])}>{t(DAYS[d])}</button>)}
-    </div>
-    <Button variant="primary" disabled={!days.length} onClick={save}>{t('Save schedule')}</Button>
+    </div> : <div style={{ margin: '14px 0' }}>
+      <div className="chips" style={{ marginBottom: 12 }}>
+        {[['date', t('Day of month')], ['last', t('Last day')], ['weekday', t('Weekday')]].map(([value, label]) =>
+          <button key={value} type="button" className={'chip' + (monthlyType === value ? ' on' : '')} aria-pressed={monthlyType === value} onClick={() => setMonthlyType(value)}>{label}</button>)}
+      </div>
+      {monthlyType === 'date' && <label className="small">{t('Day of month')} <input className="input" type="number" min="1" max="31" value={monthDay} onChange={e => setMonthDay(e.target.value)} style={{ width: 90, marginInlineStart: 8 }} /></label>}
+      {monthlyType === 'weekday' && <div className="row" style={{ gap: 8 }}>
+        <select className="input" aria-label={t('Week of month')} value={ordinal} onChange={e => setOrdinal(Number(e.target.value))}>
+          {[1, 2, 3, 4, -1].map((n, i) => <option key={n} value={n}>{[t('First'), t('Second'), t('Third'), t('Fourth'), t('Last')][i]}</option>)}
+        </select>
+        <select className="input" aria-label={t('Day of week')} value={monthWeekday} onChange={e => setMonthWeekday(Number(e.target.value))}>
+          {weekOrder(weekStartOf(st)).map(d => <option key={d} value={d}>{t(DAYN[d])}</option>)}
+        </select>
+      </div>}
+      {monthlyType === 'date' && Number(monthDay) > 28 && <div className="small dim" style={{ marginTop: 6 }}>{t('Months without this date are skipped.')}</div>}
+    </div>}
+    <Button variant="primary" disabled={frequency === 'weekly' ? !days.length : monthlyType === 'date' && (!Number.isInteger(Number(monthDay)) || Number(monthDay) < 1 || Number(monthDay) > 31)} onClick={save}>{t('Save schedule')}</Button>
     {repeat && routineId && <><div style={{ height: 8 }} /><Button variant="ghost" icon="trash" onClick={remove}>{t('Delete repeat')}</Button></>}
   </>
 }
 export const repeatDaysSheet = id => ui().openSheet(close => <ScheduleDays routineId={id} close={close} />)
 export const scheduleDaysSheet = id => ui().openSheet(close => <ScheduleDays routineId={id} close={close} />)
 
-function ScheduleSaved({ kind, initialDay, close }) {
+function ScheduleSaved({ kind, initialDay, initialIso, close }) {
   const st = useStore(s => s.S)
   const choices = st.routines.filter(r => kind === 'class' ? r.kind === 'visit' : r.kind !== 'visit' && !isExerciseRepeat(r))
   const create = () => {
@@ -2626,7 +2656,7 @@ function ScheduleSaved({ kind, initialDay, close }) {
   return <>
     <h3>{kind === 'class' ? t('Choose a class') : t('Choose a routine')}</h3>
     <div className="list menu-list">{choices.map(r => <div key={r.id} className="item menu-item" {...tappable(() => {
-      close(); ui().openSheet(done => <ScheduleDays routineId={r.id} initialDay={initialDay} close={done} />)
+      close(); ui().openSheet(done => <ScheduleDays routineId={r.id} initialDay={initialDay} initialIso={initialIso} close={done} />)
     })}><span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span><div className="grow"><div className="tt">{r.name}</div></div><Icon name="chevronRight" className="chev" /></div>)}</div>
     <div style={{ marginTop: 12 }}><Button size="sm" variant="tinted" icon="plus" onClick={create}>{kind === 'class' ? t('Create class') : t('Create routine')}</Button></div>
   </>
@@ -2640,10 +2670,11 @@ function scheduleExerciseSheet(day) {
   }, { title: t('Choose exercise') })
 }
 
-export function scheduleItemSheet({ day } = {}) {
+export function scheduleItemSheet({ day, iso } = {}) {
   menuSheet({ title: t('Schedule'), items: [
-    { icon: 'figureStrength', label: t('Routine'), onClick: () => ui().openSheet(close => <ScheduleSaved kind="routine" initialDay={day} close={close} />) },
-    { icon: 'stretch', label: t('Class'), onClick: () => ui().openSheet(close => <ScheduleSaved kind="class" initialDay={day} close={close} />) },
+    { icon: 'calendar', label: t('Once on this day'), sub: iso ? fmtDate(iso, true) : null, onClick: () => dayOverrideSheet(iso || todayISO()) },
+    { icon: 'figureStrength', label: t('Routine'), onClick: () => ui().openSheet(close => <ScheduleSaved kind="routine" initialDay={day} initialIso={iso} close={close} />) },
+    { icon: 'stretch', label: t('Class'), onClick: () => ui().openSheet(close => <ScheduleSaved kind="class" initialDay={day} initialIso={iso} close={close} />) },
     { icon: 'dumbbell', label: t('Exercise'), onClick: () => scheduleExerciseSheet(day) },
   ] })
 }

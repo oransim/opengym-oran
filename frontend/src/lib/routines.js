@@ -33,6 +33,7 @@ export function copyRoutine(routine, suffix = 'Copy') {
  */
 export function deleteRoutine(s, id) {
   s.routines = s.routines.filter(r => r.id !== id)
+  if (s.monthly) delete s.monthly[id]
   Object.keys(s.week || {}).forEach(d => {
     const ids = [].concat(s.week[d])
     if (!ids.includes(id)) return
@@ -66,7 +67,7 @@ export function routineSnapshot(S, id) {
   Object.keys(S.dayPlan || {}).forEach(iso => { if (S.dayPlan[iso] === id) dayPlan[iso] = id })
   const seqAt = Array.isArray(S.rotation?.sequence) ? S.rotation.sequence.indexOf(id) : -1
   const queueAt = Array.isArray(S.queue?.ids) ? S.queue.ids.indexOf(id) : -1
-  return { routine: structuredClone(S.routines[index]), index, week, dayPlan, seqAt, queueAt }
+  return { routine: structuredClone(S.routines[index]), index, week, dayPlan, ...(S.monthly?.[id] ? { monthly: structuredClone(S.monthly[id]) } : {}), seqAt, queueAt }
 }
 
 const putBack = (list, at, id) => {
@@ -93,6 +94,7 @@ export function restoreRoutine(s, snap) {
   })
   if (Object.keys(snap.dayPlan).length) s.dayPlan = s.dayPlan || {}
   Object.keys(snap.dayPlan).forEach(iso => { if (s.dayPlan[iso] == null) s.dayPlan[iso] = id })
+  if (snap.monthly && !s.monthly?.[id]) { s.monthly ||= {}; s.monthly[id] = structuredClone(snap.monthly) }
   if (snap.seqAt >= 0 && Array.isArray(s.rotation?.sequence)) {
     s.rotation = { ...s.rotation, sequence: putBack(s.rotation.sequence, snap.seqAt, id) }
   }

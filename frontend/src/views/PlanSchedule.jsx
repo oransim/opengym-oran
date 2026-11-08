@@ -24,12 +24,16 @@ export default function PlanSchedule({ S, nav }) {
   const selected = [...dayIds.map(routineOf).filter(Boolean), ...exerciseRepeatsOn(S, selectedIso)]
   const skipped = activeSkippedOn(S, selectedIso).map(routineOf).filter(Boolean)
   const order = weekOrder(weekStartOf(S))
-  const schedule = () => scheduleItemSheet({ day: selectedDay })
+  const schedule = () => scheduleItemSheet({ day: selectedDay, iso: selectedIso })
   const startOne = r => { if (!S.active) startFlow([r.id]) }
   const skipOne = r => useStore.getState().update(s => skipOnDate(s, selectedIso, r.id))
   const restoreOne = r => useStore.getState().update(s => restoreOnDate(s, selectedIso, r.id))
   const daysOf = id => order.filter(d => [].concat(S.week?.[d] || []).includes(id))
-  const repeating = S.routines.filter(r => isExerciseRepeat(r) || daysOf(r.id).length)
+  const repeating = S.routines.filter(r => (isExerciseRepeat(r) || daysOf(r.id).length) && !S.monthly?.[r.id])
+  const monthly = S.routines.filter(r => S.monthly?.[r.id])
+  const monthlyLabel = rule => rule.type === 'last' ? t('Last day of every month')
+    : rule.type === 'weekday' ? `${[t('First'), t('Second'), t('Third'), t('Fourth'), t('Last')][rule.ordinal === -1 ? 4 : rule.ordinal - 1]} ${t(DAYN[rule.weekday])}`
+      : t('Day {0} of every month', rule.day)
   const weekdayRoutines = d => [].concat(S.week?.[d] || []).map(routineOf).filter(Boolean)
   const coach = queueView(S, todayISO())
   const [noticeDismissed, setNoticeDismissed] = useState(() => {
@@ -105,6 +109,13 @@ export default function PlanSchedule({ S, nav }) {
         <button className="iconbtn" aria-label={t('Edit schedule for {0}', r.name)} onClick={() => repeat ? repeatDaysSheet(r.id) : scheduleDaysSheet(r.id)}><Icon name="pencil" /></button>
       </div>
     })}</div> : <div className="empty">{t('No weekly repeats yet.')}</div>}
+
+    <h4 className="sec">{t('Repeats every month')}</h4>
+    {monthly.length ? <div className="list plan-repeat-list">{monthly.map(r => <div key={r.id} className="item plan-repeat-rule">
+      <span className="lrow-i"><Icon name={isExerciseRepeat(r) ? 'dumbbell' : isVisitRoutine(r) ? 'stretch' : 'figureStrength'} /></span>
+      <div className="grow"><div className="tt">{r.name}</div><div className="ss">{monthlyLabel(S.monthly[r.id])}</div></div>
+      <button className="iconbtn" aria-label={t('Edit schedule for {0}', r.name)} onClick={() => scheduleDaysSheet(r.id)}><Icon name="pencil" /></button>
+    </div>)}</div> : <div className="empty">{t('No monthly repeats yet.')}</div>}
 
     {S.routines.length > 0 && <Section className="plan-link"><Row icon="chart" iconTint="var(--indigo)" title={t('Weekly muscle volume')}
       subtitle={t('Now in Stats, next to Muscle balance')} accessory="chevron" onClick={() => nav('/stats?focus=weekly-volume')} /></Section>}

@@ -10,6 +10,15 @@ const stateWith = ex => ({
 const roundTrip = ex => parsePlan(JSON.stringify(buildPlanBundle(stateWith(ex), 'Plan'))).routines[0].ex[0]
 
 describe('plan-share units', () => {
+  it('carries monthly rules through plan export and scheduled import', () => {
+    const source = { unit: 'kg', customEx: [], week: {}, monthly: { yoga: { type: 'weekday', ordinal: -1, weekday: 5 } },
+      routines: [{ id: 'yoga', name: 'Yoga', kind: 'visit', ex: [] }] }
+    const parsed = parsePlan(buildPlanBundle(source, 'Monthly'))
+    expect(parsed.monthly.yoga).toEqual(source.monthly.yoga)
+    const target = { unit: 'kg', customEx: [], routines: [], week: {}, monthly: {} }
+    mergePlan(target, parsed, { schedule: true })
+    expect(target.monthly[target.routines[0].id]).toEqual(source.monthly.yoga)
+  })
   it('preserves an exercise-free visit and its scheduled day across export and import', () => {
     const source = { unit: 'kg', customEx: [], week: { 2: ['yoga'] }, routines: [{ id: 'yoga', name: 'Yoga', kind: 'visit', emoji: 'stretch', ex: [] }] }
     const parsed = parsePlan(buildPlanBundle(source, 'Classes'))

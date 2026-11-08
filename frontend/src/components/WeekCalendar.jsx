@@ -4,6 +4,7 @@ import { t } from '../lib/i18n.js'
 import { dayNoteOf } from '../lib/day-notes.js'
 import { pinState, queueOf } from '../lib/queue.js'
 import { isExerciseRepeat } from '../lib/exercise-repeat.js'
+import { monthlyIdsOn } from '../lib/monthly-schedule.js'
 import Icon from './Icon.jsx'
 
 // A dated week for both the dashboard and the schedule editor. A rotation's next session
@@ -28,7 +29,7 @@ export default function WeekCalendar({ S, onDay, selectedIso }) {
     const date = new Date(start)
     date.setDate(start.getDate() + i)
     const iso = isoOf(date)
-    const assigned = [].concat(S.week?.[date.getDay()] || []).filter(id => !queueIds.includes(id))
+    const assigned = [...new Set([...[].concat(S.week?.[date.getDay()] || []), ...monthlyIdsOn(S, iso)])].filter(id => !queueIds.includes(id))
     const repeats = assigned.filter(id => isExerciseRepeat(S.routines.find(r => r.id === id)))
     const override = S.dayPlan?.[iso]
     const pin = pinState(S, override)

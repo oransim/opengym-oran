@@ -241,7 +241,8 @@ export function buildPlanBundle(S, name) {
   // written after are read the same way at the other end.
   const week = {}
   WEEK_DAYS.forEach(d => { if (S.week?.[d]?.length) week[d] = [].concat(S.week[d]) })
-  return { opengym_plan: PLAN_FMT, exported: todayISO(), name: name || '', unit, week, routines, customEx }
+  const monthly = Object.fromEntries(Object.entries(S.monthly || {}).filter(([id]) => routines.some(r => r.id === id)))
+  return { opengym_plan: PLAN_FMT, exported: todayISO(), name: name || '', unit, week, monthly, routines, customEx }
 }
 
 /**
@@ -299,10 +300,17 @@ export function parsePlan(raw, destinationUnit = 'kg') {
     })
   }))
   if (routines.some(r => r.kind === 'exercise-repeat' && r.ex.length !== 1)) throw notPlan()
+  const monthly = Object.fromEntries(Object.entries(data.monthly || {}).filter(([id, rule]) =>
+    routines.some(r => r.id === id) && rule && (
+      rule.type === 'date' && Number.isInteger(rule.day) && rule.day >= 1 && rule.day <= 31 ||
+      rule.type === 'last' ||
+      rule.type === 'weekday' && [1, 2, 3, 4, -1].includes(rule.ordinal) && Number.isInteger(rule.weekday) && rule.weekday >= 0 && rule.weekday <= 6
+    )).map(([id, rule]) => [id, { ...rule }]))
   return {
     name: (data.name || '').trim(),
     routines,
     week: data.week || {},
+    monthly,
     customEx,
     dropped,
     routineCount: routines.filter(r => r.kind !== 'exercise-repeat').length,
@@ -362,6 +370,10 @@ export function mergePlan(s, bundle, { schedule } = {}) {
       // is left absent rather than stored as `[]`.
       const ids = [].concat(val).map(oldId => ridMap[oldId]).filter(Boolean)
       if (ids.length) s.week[d] = ids
+    })
+    s.monthly ||= {}
+    Object.entries(source.monthly || {}).forEach(([oldId, rule]) => {
+      if (ridMap[oldId]) s.monthly[ridMap[oldId]] = { ...rule }
     })
   }
   // `ids`: the new routines' ids in the plan's order, for a caller that puts them in a rotation.

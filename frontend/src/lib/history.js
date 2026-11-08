@@ -2,6 +2,7 @@
 import { syncSupersetMeta } from './superset-meta.js'
 import { routineHasContent } from './visit-routine.js'
 import { isExerciseRepeat } from './exercise-repeat.js'
+import { monthlyIdsOn } from './monthly-schedule.js'
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
 import { fmtSpeed } from './speed.js'
 import { hasIncline, inclineFrom } from './incline.js'
@@ -504,7 +505,8 @@ export function effectiveRoutineIds(S, iso, today = todayISO()) {
   const pin = pinState(S, ov)
   if (!pin && ov && S.routines.some(r => r.id === ov && !isExerciseRepeat(r))) return skipped.has(ov) ? [] : [ov]
   const wd = new Date(iso + 'T12:00:00').getDay()
-  const weekday = [].concat(S.week[wd] || []).filter(id => S.routines.some(r => r.id === id && !isExerciseRepeat(r)))
+  const weekday = [...new Set([...[].concat(S.week?.[wd] || []), ...monthlyIdsOn(S, iso)])]
+    .filter(id => S.routines.some(r => r.id === id && !isExerciseRepeat(r)))
   const q = pin === 'open' ? ov : queueNext(S, iso, today)
   // The planner's weekday pointers stay hidden on the queue's day even when it has no session for
   // it (every remaining one pinned to another day): those sessions have their days.
@@ -530,7 +532,7 @@ export const effectiveRoutine = (S, iso) => effectiveRoutines(S, iso)[0] ?? null
  * "what's next" label.
  */
 export function nextTrainingDay(S, iso) {
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= (Object.keys(S.monthly || {}).length ? 62 : 7); i++) {
     const d = new Date(iso + 'T12:00:00')
     d.setDate(d.getDate() + i)
     const nextIso = isoOf(d)
