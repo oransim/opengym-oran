@@ -302,6 +302,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'Legalább {0} karakter. Néhány egymáshoz nem kapcsolódó szó jó jelszót ad.',
   'Set password & sign in': 'Jelszó beállítása és bejelentkezés',
   'Create profile': 'Profil létrehozása',
+  'Create account': 'Fiók létrehozása',
   'Pick a name and a password. You sign in with both.': 'Válassz egy nevet és egy jelszót. Mindkettővel jelentkezel be.',
   'Enter your password.': 'Add meg a jelszavad.',
   'Enter the reset code.': 'Add meg a visszaállító kódot.',

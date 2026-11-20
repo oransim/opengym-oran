@@ -293,6 +293,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': '至少 {0} 個字元。使用數個毫無關聯的單字組合作為密碼更安全。',
   'Set password & sign in': '設定密碼並登入',
   'Create profile': '建立個人檔案',
+  'Create account': '建立帳號',
   'Pick a name and a password. You sign in with both.': '設定名稱與密碼，日後將使用這兩項資訊登入。',
   'Enter your password.': '請輸入密碼。',
   'Enter the reset code.': '請輸入重設代碼。',

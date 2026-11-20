@@ -217,7 +217,8 @@ describe('the Coach chat', () => {
 
   it('lays the plan’s week out from the day the week is set to start on', async () => {
     const days = () => [...container.querySelectorAll('.pcard-wd')].map(d => d.textContent)
-    await mount({ id: 'p1', kind: 'create', bundle: bundle({ 0: 'x1', 1: 'x2' }) })
+    const monday = state(); monday.weekStart = 1
+    await mount({ id: 'p1', kind: 'create', bundle: bundle({ 0: 'x1', 1: 'x2' }) }, null, { S: monday })
     expect(days()).toEqual(['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'])
     const sunday = state(); sunday.weekStart = 0
     await mount({ id: 'p1', kind: 'create', bundle: bundle({ 0: 'x1', 1: 'x2' }) }, null, { S: sunday })

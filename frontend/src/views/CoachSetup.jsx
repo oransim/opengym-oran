@@ -11,6 +11,7 @@
 // progress line that reports real steps rather than a pretend byte counter.
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { backTo } from '../lib/nav.js'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
@@ -150,7 +151,7 @@ export default function CoachSetup() {
 
   return <div className="narrow">
     <div className="hdr">
-      <button className="iconbtn" data-back="/settings" onClick={() => nav('/settings')} aria-label={t('Back')}><Icon name="chevronLeft" /></button>
+      <button className="iconbtn" data-back="/settings" onClick={() => backTo(nav, '/settings')} aria-label={t('Back')}><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginInlineStart: 12 }}><h1>{t('AI Coach')}</h1></div>
     </div>
 

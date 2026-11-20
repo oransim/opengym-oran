@@ -311,6 +311,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'Minst {0} tecken. Några orelaterade ord blir ett bra lösenord.',
   'Set password & sign in': 'Spara lösenord och logga in',
   'Create profile': 'Skapa profil',
+  'Create account': 'Skapa konto',
   'Pick a name and a password. You sign in with both.': 'Välj ett namn och ett lösenord. Du loggar in med båda.',
   'Enter your password.': 'Ange ditt lösenord.',
   'Enter the reset code.': 'Ange återställningskoden.',

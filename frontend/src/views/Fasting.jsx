@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { backTo } from '../lib/nav.js'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { activeFast, completedFasts, deleteFast, endFast, fastDuration, startFast } from '../lib/fasting.js'
@@ -35,7 +36,7 @@ export default function Fasting() {
 
   return <div className="narrow">
     <div className="hdr">
-      <button className="iconbtn" data-back="/home" onClick={() => nav('/home')} aria-label={t('Home')}><Icon name="chevronLeft" /></button>
+      <button className="iconbtn" data-back="/home" onClick={() => backTo(nav, '/home')} aria-label={t('Home')}><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginInlineStart: 12 }}><h1>{t('Fasting')}</h1><div className="sub">{t('Your fasting timer and history')}</div></div>
     </div>
 

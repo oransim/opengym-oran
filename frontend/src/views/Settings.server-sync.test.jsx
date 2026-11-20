@@ -257,7 +257,7 @@ describe('leaving the server', () => {
     const sheet = openSheet()
     expect(sheet.textContent).toContain('Sign in again, or export a backup first.')
     expect(sheet.textContent).not.toContain('Try again')
-    expect(buttonByText(sheet, 'Sign in with passkey')).toBeTruthy()
+    expect(buttonByText(sheet, 'Sign in')).toBeTruthy()
   })
 
   it('a server that is only out of reach still offers Try again, and says so', async () => {
@@ -297,7 +297,7 @@ describe('leaving the server', () => {
     expect(mocks.navs).toEqual(['/home'])
 
     act(() => rowByTitle(page, 'Sign out everywhere').click())
-    expect(confirm().message).toContain('Phones paired with it are disconnected and have to be paired again.')
+    expect(confirm().message).toContain('Sign in again with your username and password.')
     mocks.signOutAll.mockRejectedValueOnce(new Error('HTTP 502'))
     await act(async () => { await confirm().onConfirm() })
     expect(mocks.toast).toHaveBeenLastCalledWith('Couldn’t sign out everywhere. You’re still signed in.')

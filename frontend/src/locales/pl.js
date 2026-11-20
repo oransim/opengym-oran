@@ -297,6 +297,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'Co najmniej {0} znaków. Kilka niezwiązanych ze sobą słów to dobre hasło.',
   'Set password & sign in': 'Ustaw hasło i zaloguj się',
   'Create profile': 'Utwórz profil',
+  'Create account': 'Utwórz konto',
   'Pick a name and a password. You sign in with both.': 'Wybierz nazwę i hasło. Logujesz się jednym i drugim.',
   'Enter your password.': 'Wpisz swoje hasło.',
   'Enter the reset code.': 'Wpisz kod resetu.',

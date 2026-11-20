@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { backTo } from '../lib/nav.js'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { exOr } from '../lib/exercises.js'
@@ -42,7 +43,7 @@ export default function StructuralBalance() {
   }
 
   return <>
-    <div className="hdr"><button className="iconbtn" data-back="/stats" onClick={() => nav('/stats')} aria-label={t('Stats')}><Icon name="chevronLeft" /></button>
+    <div className="hdr"><button className="iconbtn" data-back="/stats" onClick={() => backTo(nav, '/stats')} aria-label={t('Stats')}><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginInlineStart: 12 }}><h1>{t('Structural balance')}</h1>
         <div className="sub">{t('Compare your lifts against a published ratio table to find the weak link.')}</div></div></div>
 

@@ -1,40 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { webauthnOK, bio, BIO, passkeyError, api } from './api.js'
-import de from '../locales/de.js'
+import { api } from './api.js'
 import { _setLangState } from './i18n-core.js'
-
-const originalPublicKeyCredential = window.PublicKeyCredential
-const originalCredentials = navigator.credentials
-
-function setCapability(target, property, value) {
-  Object.defineProperty(target, property, { configurable: true, value })
-}
-
-afterEach(() => {
-  setCapability(window, 'PublicKeyCredential', originalPublicKeyCredential)
-  setCapability(navigator, 'credentials', originalCredentials)
-})
-
-describe('webauthnOK', () => {
-  it('accepts WebAuthn when PublicKeyCredential is exposed', () => {
-    setCapability(window, 'PublicKeyCredential', class PublicKeyCredential {})
-    setCapability(navigator, 'credentials', {})
-    expect(webauthnOK()).toBe(true)
-  })
-
-  it('does not reject WebAuthn when the generic credentials check is unavailable', () => {
-    setCapability(window, 'PublicKeyCredential', class PublicKeyCredential {})
-    setCapability(navigator, 'credentials', undefined)
-    expect(webauthnOK()).toBe(true)
-  })
-
-  it('rejects browsers without the WebAuthn credential type', () => {
-    setCapability(window, 'PublicKeyCredential', undefined)
-    setCapability(navigator, 'credentials', {})
-    expect(webauthnOK()).toBe(false)
-  })
-})
 
 describe('api()', () => {
   it('a failed request throws with the status and the parsed body attached', async () => {
@@ -136,89 +103,18 @@ describe('api() gives up on a request that never answers', () => {
   })
 })
 
-// Settings asks for a passkey as proof before a way in is added or removed (components/
-// PasswordAuth.jsx, ProveOwner), and calls the prompt off when its sheet closes: the signal has
-// to reach the browser's prompt, or a prompt nobody sees any more could still answer.
-describe('passkeyAssertion', () => {
-  const originalCredentials = navigator.credentials
-  afterEach(() => { vi.unstubAllGlobals(); setCapability(navigator, 'credentials', originalCredentials) })
-  const options = () => new Response(JSON.stringify({ cid: 'c1', options: { challenge: 'AAAA', allowCredentials: [] } }), { status: 200, headers: { 'content-type': 'application/json' } })
-  const assertion = { id: 'k1', rawId: new Uint8Array([1]).buffer, type: 'public-key', response: { clientDataJSON: new Uint8Array([2]).buffer, authenticatorData: new Uint8Array([3]).buffer, signature: new Uint8Array([4]).buffer, userHandle: null } }
-
-  it('hands the signal to the prompt, and answers with the challenge id and the assertion', async () => {
-    const { passkeyAssertion } = await import('./api.js')
-    vi.stubGlobal('fetch', async () => options())
-    const get = vi.fn(async () => assertion)
-    setCapability(navigator, 'credentials', { get })
-    const ctl = new AbortController()
-    const r = await passkeyAssertion({ signal: ctl.signal })
-    expect(get.mock.calls[0][0].signal).toBe(ctl.signal)
-    expect(r.cid).toBe('c1')
-    expect(r.credential.id).toBe('k1')
-    // Without one, the prompt is asked for exactly as before.
-    await passkeyAssertion()
-    expect('signal' in get.mock.calls[1][0]).toBe(false)
-  })
-
-  it('a prompt called off rejects as an AbortError', async () => {
-    const { passkeyAssertion } = await import('./api.js')
-    vi.stubGlobal('fetch', async () => options())
-    setCapability(navigator, 'credentials', {
-      get: ({ signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
-    })
-    const ctl = new AbortController()
-    const p = passkeyAssertion({ signal: ctl.signal })
-    await new Promise(r => setTimeout(r, 0))
-    ctl.abort()
-    await expect(p).rejects.toMatchObject({ name: 'AbortError' })
-  })
-})
-
-// QA 1.3.9: "confirm with {0}" was translated and {0} was not — a German sign-in page read
-// "…bestätige mit your fingerprint, face or PIN".
-describe('bio', () => {
-  afterEach(() => _setLangState('en', {}, null, null))
-  it('reads the platform phrase in the UI language', () => {
-    expect(bio()).toBe(BIO)
-    _setLangState('de', { [BIO]: 'BIO-de' }, null, null)
-    expect(bio()).toBe('BIO-de')
-  })
-})
-
-// The passkey routes answer in English with a stable `code`; the toast used to show the English
-// line ("unknown passkey, create a profile first") in every language.
-describe('passkeyError', () => {
-  afterEach(() => _setLangState('en', {}, null, null))
-  const refused = (code, message) => Object.assign(new Error(message), { status: 400, data: { error: message, code } })
-  it('says each refusal in the UI language', () => {
-    _setLangState('de', de, null, null)
-    expect(passkeyError(refused('invite', 'a valid invite code is required'), 'x')).toBe(de['That invite code is not valid.'])
-    expect(passkeyError(refused('unknown-credential', 'unknown passkey, create a profile first'), 'x')).toBe(de['This server doesn’t know that passkey. Make a profile first.'])
-    expect(passkeyError(refused('disabled', 'this account has been disabled'), 'x')).toBe(de['This account has been disabled.'])
-    expect(passkeyError(refused('challenge-expired', 'challenge expired, try again'), 'x')).toBe(de['That took a little too long. Give it another go.'])
-  })
-  it('an answer without a code is shown as it came, and nothing at all falls back', () => {
-    expect(passkeyError(refused(undefined, 'credential already registered'), 'Sign-in failed')).toBe('credential already registered')
-    expect(passkeyError({}, 'Sign-in failed')).toBe('Sign-in failed')
-  })
-})
-
 // Self-hosting (Discord tcmac 10-21): an api service whose ORIGIN is not the address in the
 // browser refuses every write, and the app used to show "cross-origin request refused".
 describe('a write refused for the wrong address', () => {
-  const KEY = 'This server only takes changes made at {0}. If you opened openGym at another address, whoever runs the server can set ORIGIN and RP_ID to match it (the self-hosting guide shows how).'
+  const KEY = 'This server only takes changes made at {0}. If you opened openGym at another address, set ORIGIN to match it.'
   afterEach(() => { _setLangState('en', {}, null, null); vi.unstubAllGlobals() })
   const answer = (status, body) => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })))
   it('says which address the server expects, in the UI language', async () => {
-    _setLangState('de', de, null, null)
+    _setLangState('de', { [KEY]: 'Dieser Server akzeptiert nur Änderungen von {0}.' }, null, null)
     answer(403, { error: 'cross-origin request refused', code: 'origin-mismatch', expected: 'http://localhost:8080' })
     const e = await api('/api/data', { method: 'PUT', body: '{}' }).catch(x => x)
     expect(e.status).toBe(403)
-    expect(e.message).toBe(de[KEY].replace('openGym', 'Open Gym Oran').replace('{0}', 'http://localhost:8080'))
-  })
-  it('a passkey refused for the same reason says the same', () => {
-    const e = Object.assign(new Error('Unexpected authentication response origin ...'), { status: 400, data: { code: 'origin-mismatch', expected: 'https://gym.example.com' } })
-    expect(passkeyError(e, 'x')).toBe(KEY.replace('openGym', 'Open Gym Oran').replace('{0}', 'https://gym.example.com'))
+    expect(e.message).toBe('Dieser Server akzeptiert nur Änderungen von http://localhost:8080.')
   })
   it('any other refusal keeps the server\'s words', async () => {
     answer(403, { error: 'forbidden' })

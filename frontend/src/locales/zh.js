@@ -297,6 +297,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': '至少 {0} 个字符。几个互不相关的词就是一个好密码。',
   'Set password & sign in': '设置密码并登录',
   'Create profile': '创建档案',
+  'Create account': '创建账户',
   'Pick a name and a password. You sign in with both.': '选择一个名字和一个密码。你用两者一起登录。',
   'Enter your password.': '请输入你的密码。',
   'Enter the reset code.': '请输入重置码。',

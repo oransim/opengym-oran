@@ -114,7 +114,7 @@ describe('OwedSheet with photos and videos waiting', () => {
     expect(host.textContent).toContain('1 photo or video has not reached your server yet.')
     expect(host.textContent).toContain('Sign in again, or export a backup first.')
     expect(host.textContent).not.toContain('Try again')
-    expect(button('Sign in with passkey')).toBeTruthy()
+    expect(button('Sign in')).toBeTruthy()
     expect(button('Export with photos & videos (.zip)')).toBeTruthy()
   })
 

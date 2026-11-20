@@ -10,16 +10,17 @@ import { effortWeeks } from './effort.js'
 const WED = '2026-08-19'
 
 describe('weekStartOf', () => {
-  it('defaults to Monday for state written before the setting existed', () => {
-    expect(weekStartOf({})).toBe(MONDAY)
-    expect(weekStartOf(undefined)).toBe(MONDAY)
-    expect(weekStartOf({ weekStart: undefined })).toBe(MONDAY)
+  it('defaults to Sunday for state without a week-start setting', () => {
+    expect(weekStartOf({})).toBe(SUNDAY)
+    expect(weekStartOf(undefined)).toBe(SUNDAY)
+    expect(weekStartOf({ weekStart: undefined })).toBe(SUNDAY)
   })
 
-  it('only 0 means Sunday — a junk value is not a third week shape', () => {
+  it('respects explicit choices and uses Sunday for invalid values', () => {
     expect(weekStartOf({ weekStart: SUNDAY })).toBe(SUNDAY)
-    expect(weekStartOf({ weekStart: 3 })).toBe(MONDAY)
-    expect(weekStartOf({ weekStart: null })).toBe(MONDAY)
+    expect(weekStartOf({ weekStart: MONDAY })).toBe(MONDAY)
+    expect(weekStartOf({ weekStart: 3 })).toBe(SUNDAY)
+    expect(weekStartOf({ weekStart: null })).toBe(SUNDAY)
   })
 })
 

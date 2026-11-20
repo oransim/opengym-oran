@@ -52,8 +52,8 @@ describe('buildWidgetSnapshot', () => {
     const newer = { id: 'w1', d: '2026-10-13', end: 5, prs: ['0025'], entries: [{ id: '0025', target: { mode: 'reps' }, sets: [{ w: 62.5, r: 8, done: true }, { w: 65, r: 6, done: true }] }] }
     const snap = buildWidgetSnapshot(S({ workouts: [newer, older] }), { today: TODAY })
     expect(snap.week).toEqual({ done: 1, planned: 2 })
-    expect(snap.weekFrom).toBe('2026-10-12')
-    expect(snap.weekUntil).toBe('2026-10-19')
+    expect(snap.weekFrom).toBe('2026-10-11')
+    expect(snap.weekUntil).toBe('2026-10-18')
     expect(typeof snap.streak).toBe('number')
     expect(snap.lastPR).toMatchObject({ value: '65 kg', d: '2026-10-13' })
     expect(snap.lastPR.name).toBeTruthy()

@@ -328,6 +328,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'অন্তত {0}টি অক্ষর। কয়েকটি সম্পর্কহীন শব্দ মিলিয়ে ভালো পাসওয়ার্ড হয়।',
   'Set password & sign in': 'পাসওয়ার্ড সেট করে সাইন ইন করুন',
   'Create profile': 'প্রোফাইল তৈরি করুন',
+  'Create account': 'অ্যাকাউন্ট তৈরি করুন',
   'Pick a name and a password. You sign in with both.': 'একটি নাম ও একটি পাসওয়ার্ড বেছে নিন। দুটো দিয়েই সাইন ইন করবেন।',
   'Enter your password.': 'আপনার পাসওয়ার্ড লিখুন।',
   'Enter the reset code.': 'রিসেট কোডটি লিখুন।',

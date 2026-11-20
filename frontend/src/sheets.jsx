@@ -2783,6 +2783,7 @@ export const routinePreviewSheet = (routineId, iso) => ui().openSheet(close => <
 
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)
+  const completed = workoutsOn(st, iso)
   const hasOvr = st.dayPlan[iso] !== undefined
   const skipped = activeSkippedOn(st, iso)
   const bookedRoutine = st.routines.find(r => r.id === st.dayPlan[iso] && !isExerciseRepeat(r) && !skipped.includes(r.id))
@@ -2859,6 +2860,10 @@ function DayOverride({ iso, close }) {
   }
   return <>
     <h3>{fmtDate(iso, true)}</h3>
+    {completed.length > 0 && <section aria-label={t('Done')} style={{ marginBottom: 16 }}>
+      <h4 className="sec">{t('Done')}</h4>
+      <div className="list">{completed.map(w => <WorkoutRow key={w.id ?? `${w.d}-${w.start}`} w={w} onClick={() => { close(); workoutDetailSheet(w) }} />)}</div>
+    </section>}
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
     {missed && <div style={{ marginBottom: 14 }}><Button variant="primary" icon="checkCircle" onClick={logIt}>{t('Log this workout')}</Button></div>}
     {canNote && <div className="day-note" style={{ marginBottom: 14 }}>

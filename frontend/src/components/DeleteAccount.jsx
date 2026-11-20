@@ -14,6 +14,7 @@ export function deleteAccountError(e) {
   switch (e?.data?.code) {
     case 'confirm-name': return t('That is not your account name.')
     case 'last-admin': return t('You’re the only admin here, and other profiles still use this server. Make someone else an admin first.')
+    case 'password-required': return t('This account has no password yet. Ask an admin for a reset code before deleting it.')
   }
   if (e?.data?.code || e?.status === 429) return passwordError(e)
   return t('Couldn’t delete the account. Nothing was removed.')
@@ -70,7 +71,8 @@ export function DeleteAccountSheet({ close, exportBackup, exportBackupZip, hasMe
     </> : <>
       <div className="dim small" style={{ marginBottom: 14 }}>{t('First confirm that it is you.')}</div>
       {!proofs ? (err ? <div className="small" role="alert" style={errStyle}>{err}</div> : <div className="dim small">{t('Loading…')}</div>)
-        : <ProveOwner password={password} explain={deleteAccountError} danger submitText={t('Delete forever')} onProof={remove} />}
+        : !password ? <div className="small" role="alert" style={errStyle}>{t('This account has no password yet. Ask an admin for a reset code before deleting it.')}</div>
+          : <ProveOwner explain={deleteAccountError} danger submitText={t('Delete forever')} onProof={remove} />}
       <div style={{ height: 8 }} />
       <Button type="button" variant="ghost" className="dim" onClick={() => setStep('name')}>{t('Back')}</Button>
     </>}

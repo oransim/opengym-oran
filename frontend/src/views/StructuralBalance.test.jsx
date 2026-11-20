@@ -164,7 +164,7 @@ describe('StructuralBalance view', () => {
   it('the back chevron navigates to /stats', () => {
     const host = render()
     act(() => host.querySelector('.iconbtn').click())
-    expect(navSpy).toHaveBeenCalledWith('/stats')
+    expect(navSpy).toHaveBeenCalledWith('/stats', { replace: true })
   })
 
   it('changing a role\'s exercise via the picker saves an override and marks it custom', () => {

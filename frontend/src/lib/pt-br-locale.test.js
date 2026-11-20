@@ -60,7 +60,7 @@ describe('Brazilian Portuguese locale', () => {
     expect(ptBR['Delete workout']).toBe('Excluir treino')
     expect(ptBR.Superset).toBe('Superset')
     expect(ptBR['Guest mode: your data lives only in this browser.']).toContain('visitante')
-    expect(ptBR['Sign in with passkey']).toContain('chave de acesso')
+    expect(ptBR['Sign in']).toBe('Entrar')
     expect(ptBR.band).toBe('elástico')
     expect(ptBR['resistance band']).toBe('faixa elástica')
     expect(ptBR.soleus).toBe('sóleo')

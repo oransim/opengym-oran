@@ -212,6 +212,7 @@ describe('Home — coach week progress row', () => {
     setS({
       queue: queue({ rotationId: 'r1' }),
       rotation: { id: 'r1', sequence: ['d1', 'd2', 'd3'], label: 'US W1' },
+      weekStart: 1, // This fixture's older workout is in the preceding Monday-first week.
       week: { [new Date().getDay()]: ['own'] }, workouts: [logged('d1'), core],
     })
     mount()

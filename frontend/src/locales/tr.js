@@ -297,6 +297,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'En az {0} karakter. Birbiriyle ilgisiz birkaç kelime iyi bir şifre olur.',
   'Set password & sign in': 'Şifreyi belirle ve giriş yap',
   'Create profile': 'Profil oluştur',
+  'Create account': 'Hesap oluştur',
   'Pick a name and a password. You sign in with both.': 'Bir isim ve bir şifre seç. İkisiyle birlikte giriş yaparsın.',
   'Enter your password.': 'Şifreni gir.',
   'Enter the reset code.': 'Sıfırlama kodunu gir.',

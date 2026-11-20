@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom'
+import { backPath, backTo } from '../lib/nav.js'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -371,7 +372,7 @@ export default function RoutineEdit() {
   const update = useStore(s => s.update)
   const toast = useUI(s => s.toast)
   const r = S.routines.find(x => x.id === id)
-  useEffect(() => { if (!r) nav('/routines') }, [!!r])
+  useEffect(() => { if (!r) nav('/routines', { replace: true }) }, [!!r])
   // Editing here has no explicit "save" — every field change persists immediately. A single
   // auto-backup on the way out (not per keystroke) covers the whole editing session, deletion
   // included: this still unmounts after the delete button navigates away.
@@ -463,10 +464,13 @@ export default function RoutineEdit() {
   const profile = activeProfile(S)
   const missingCount = profile ? r.ex.filter(e => !exAvailable(S, exOr(e.id))).length : 0
   const swipe = workoutControls(S).swipeSets
+  const backDestination = backPath('/routines', ['/routines', '/plan'])
 
   return <div className="narrow">
     <div className="hdr">
-      <button className="iconbtn" data-back="/routines" onClick={() => nav('/routines')} aria-label={t('Routines')}><Icon name="chevronLeft" /></button>
+      <button className="iconbtn" data-back={backDestination}
+        onClick={() => backTo(nav, '/routines', ['/routines', '/plan'])}
+        aria-label={backDestination === '/plan' ? t('Plan') : t('Routines')}><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, margin: '0 12px' }}>
         <input className="input" defaultValue={r.name} style={{ fontWeight: 600, fontSize: 20, letterSpacing: '-.021em' }}
           onChange={e => update(s => { s.routines.find(x => x.id === id).name = e.target.value.trim() || t('Routine') })} />

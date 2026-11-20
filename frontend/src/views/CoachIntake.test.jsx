@@ -367,7 +367,7 @@ describe('CoachIntake — moving around', () => {
     act(() => host.querySelector('.iconbtn').click())
     expect(eyebrow()).toBe('Before we start')
     act(() => host.querySelector('.iconbtn').click())
-    expect(mocks.nav).toHaveBeenCalledWith('/plan')
+    expect(mocks.nav).toHaveBeenLastCalledWith('/plan', { replace: true })
   })
 
   it('Back from the first screen of the editor goes to the conversation, not the plan', () => {
@@ -375,7 +375,7 @@ describe('CoachIntake — moving around', () => {
     mount()
     expect(eyebrow()).toBe('Your goal')
     act(() => host.querySelector('.iconbtn').click())
-    expect(mocks.nav).toHaveBeenCalledWith('/coach')
+    expect(mocks.nav).toHaveBeenLastCalledWith('/coach', { replace: true })
   })
 
   it('Skip is offered only on the three optional screens, and never on the last one', () => {

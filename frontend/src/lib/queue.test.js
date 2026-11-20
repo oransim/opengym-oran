@@ -215,7 +215,7 @@ describe('queueView', () => {
 })
 
 describe('weekTally — the streak card fraction', () => {
-  // Monday-start weeks (no S.weekStart); TODAY is Wednesday 2026-09-09, the queue applied Monday.
+  // TODAY is Wednesday 2026-09-09; the queue applied Monday. Cases that need a Monday start set it explicitly.
   const own = (d, over = {}) => w({ id: 'own-' + d, d, start: Date.parse(d + 'T18:00:00'), routineIds: ['own'], name: 'Core', ...over })
 
   it('without a queue: this calendar week\'s workouts over the weekdays with a plan, as before', () => {
@@ -273,7 +273,7 @@ describe('weekTally — the streak card fraction', () => {
       w({ id: 'wed', d: '2026-09-09', start: SINCE + 2 * 86400000, routineIds: ['d2', 'own'], name: 'US W1 D2 + Core' }),
       w({ id: 'fri', d: '2026-09-11', start: SINCE + 4 * 86400000, routineIds: ['d3'], name: 'US W1 D3' }),
     ]
-    expect(weekTally(S({ week: { 3: ['own'] }, workouts: week }), '2026-09-13')).toEqual({ done: 4, planned: 4 })
+    expect(weekTally(S({ weekStart: 1, week: { 3: ['own'] }, workouts: week }), '2026-09-13')).toEqual({ done: 4, planned: 4 })
     expect(queueDone(S({ workouts: week }))).toEqual(['d1', 'd2', 'd3'])
   })
 

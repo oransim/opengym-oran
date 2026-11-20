@@ -1,6 +1,6 @@
-/* Issue #107: disabling locks an account out but deliberately leaves state-<uid>.json and the
-   credential record in place, so "no data remains" was not reachable from the dashboard. Delete
-   removes the user, their credentials, their push subscriptions, their training history and any
+/* Issue #107: disabling locks an account out but deliberately leaves state-<uid>.json in place,
+   so "no data remains" was not reachable from the dashboard. Delete
+   removes the user, their push subscriptions, their training history and any
    Coach credential — and refuses the two cases nothing in the UI could undo afterwards. Real
    server.js in a child, same harness as server-admin-state.test.js. */
 import { test } from 'node:test';
@@ -31,7 +31,6 @@ async function startServer(t, { twoAdmins = false } = {}) {
   if (twoAdmins) users.push({ id: ADMIN2, name: 'Second', created: new Date().toISOString(), admin: true });
   fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
     users,
-    creds: [{ id: 'c-victim', userId: VICTIM, publicKey: 'x' }, { id: 'c-admin', userId: ADMIN, publicKey: 'y' }],
     subs: [{ endpoint: 'https://push/victim', userId: VICTIM }, { endpoint: 'https://push/admin', userId: ADMIN }],
     invites: [{ code: 'CODE1', usedBy: VICTIM, usedAt: new Date().toISOString() }],
   }));
@@ -69,7 +68,6 @@ test('removes the account and everything attached to it', async t => {
 
   const db = h.db();
   assert.deepEqual(db.users.map(u => u.id), [ADMIN], 'the user is gone');
-  assert.deepEqual(db.creds.map(c => c.userId), [ADMIN], 'their passkeys are gone');
   assert.deepEqual(db.subs.map(s => s.userId), [ADMIN], 'their push subscriptions are gone');
   assert.equal(fs.existsSync(path.join(h.dataDir, `state-${VICTIM}.json`)), false, 'their history is gone');
   // The code they joined with stays burned: it was used, and freeing it would quietly widen

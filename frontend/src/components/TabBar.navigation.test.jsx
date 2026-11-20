@@ -2,13 +2,13 @@
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import TabBar from './TabBar.jsx'
 import { DEF, useStore } from '../store/useStore.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-let host, root, router, originalS, originalUser, onStart
+let host, root, router, originalS, originalUser
 beforeEach(() => {
   const store = useStore.getState()
   originalS = store.S
@@ -17,8 +17,7 @@ beforeEach(() => {
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
-  onStart = vi.fn()
-  router = createMemoryRouter([{ path: '*', element: <TabBar onStart={onStart} /> }], { initialEntries: ['/home'] })
+  router = createMemoryRouter([{ path: '*', element: <TabBar /> }], { initialEntries: ['/home'] })
   act(() => root.render(<RouterProvider router={router} />))
 })
 afterEach(() => {
@@ -72,17 +71,8 @@ describe('root tab history', () => {
     expect(router.state.historyAction).toBe('REPLACE')
   })
 
-  it('shows six distinct actions, with Routines beside Exercises', () => {
+  it('shows five navigation destinations, with workout actions on the day card', () => {
     const labels = [...host.querySelectorAll('#tabbar button')].map(b => b.textContent.trim())
-    expect(labels).toEqual(['Home', 'Plan', 'Start', 'Stats', 'Routines', 'Exercises'])
-  })
-
-  it('preserves the workout chooser return path', async () => {
-    useStore.setState({ S: { ...useStore.getState().S, routines: [] } })
-    await tap('Start')
-    expect(router.state.location.pathname).toBe('/workout')
-    await go(-1)
-    expect(router.state.location.pathname).toBe('/home')
-    expect(onStart).not.toHaveBeenCalled()
+    expect(labels).toEqual(['Home', 'Plan', 'Stats', 'Routines', 'Exercises'])
   })
 })

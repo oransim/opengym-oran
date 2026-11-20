@@ -1,9 +1,9 @@
 /* "Sign out everywhere" (POST /api/logout/all) has to take the account's outstanding pairing
    codes with it: a code is a session-in-waiting, and one minted before the sign-out could
-   otherwise be redeemed for a fresh token carrying the new session version. And minting a code
-   asks the owner proof (proveOwner): a session alone, which may be a stolen cookie, gets no code.
+   otherwise be redeemed for a fresh token carrying the new session version. Minting a code
+   asks for the owner's current password: a session alone gets no code.
    Real server.js in a child. */
-import { test } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -11,7 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { boundPort, softPasskey } from './helpers.mjs';
+import { hashPassword } from '../password.js';
+import { boundPort } from './helpers.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -23,16 +24,21 @@ function mintSession(uid, sv = 0) {
 }
 const cookie = (uid, sv) => ({ Cookie: `gymsid=${mintSession(uid, sv)}` });
 
-const KEYS = { u_test_1: softPasskey(), u_test_2: softPasskey() };
-const USERS = [
-  { id: 'u_test_1', name: 'One', created: new Date().toISOString() },
-  { id: 'u_test_2', name: 'Two', created: new Date().toISOString() }
-];
+const PASSWORDS = { u_test_1: 'correct horse battery staple', u_test_2: 'a different long password' };
+let passwordHashes;
+before(async () => {
+  passwordHashes = Object.fromEntries(await Promise.all(Object.entries(PASSWORDS).map(async ([uid, pw]) => [uid, await hashPassword(pw)])));
+});
 
 async function startServer(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-pair-'));
   fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: USERS, creds: Object.entries(KEYS).map(([uid, k]) => k.row(uid)), subs: [], invites: [] }));
+  const users = Object.keys(PASSWORDS).map(uid => ({
+    id: uid, name: uid === 'u_test_1' ? 'One' : 'Two', created: new Date().toISOString(),
+    pw: { h: passwordHashes[uid], set: new Date().toISOString() }
+  }));
+  users.push({ id: 'u_no_password', name: 'NoPassword', created: new Date().toISOString() });
+  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users, subs: [], invites: [] }));
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
@@ -51,13 +57,8 @@ async function startServer(t) {
 test('logout/all invalidates the account\'s outstanding pairing codes and nobody else\'s', async t => {
   const h = await startServer(t);
   const post = (p, headers, body) => fetch(`${h.api}${p}`, { method: 'POST', headers: body ? { ...headers, 'Content-Type': 'application/json' } : headers, body: body && JSON.stringify(body) });
-  // A passkey assertion made for this request, the way Settings confirms before showing a code.
-  const proof = async uid => {
-    const { cid, options } = await (await post('/api/login/options', {}, {})).json();
-    return { cid, credential: KEYS[uid].assertion(options.challenge) };
-  };
   const create = async (uid, sv) => {
-    const r = await post('/api/pair/create', cookie(uid, sv), await proof(uid));
+    const r = await post('/api/pair/create', cookie(uid, sv), { current: PASSWORDS[uid] });
     assert.equal(r.status, 200);
     return (await r.json()).code;
   };
@@ -84,33 +85,33 @@ test('logout/all invalidates the account\'s outstanding pairing codes and nobody
   assert.match(token.split('.')[0], /^u_test_1:\d+:1:b$/);
 });
 
-test('minting a pairing code asks the owner proof: a session alone gets none', async t => {
+test('minting a pairing code requires the owner password and redeems only once', async t => {
   const h = await startServer(t);
   const post = (p, headers, body) => fetch(`${h.api}${p}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
-  const options = async () => (await post('/api/login/options', {}, {}).then(r => r.json()));
-
   // No proof: refused, and nothing a phone could redeem was made.
   const none = await post('/api/pair/create', cookie('u_test_1', 0), {});
   assert.equal(none.status, 403);
-  assert.equal((await none.json()).code, 'passkey-required');
+  assert.equal((await none.json()).code, 'current-required');
 
-  // Another profile's passkey proves nothing about this one.
-  const o1 = await options();
-  const foreign = await post('/api/pair/create', cookie('u_test_1', 0), { cid: o1.cid, credential: KEYS.u_test_2.assertion(o1.options.challenge) });
+  // Another profile's password proves nothing about this one.
+  const foreign = await post('/api/pair/create', cookie('u_test_1', 0), { current: PASSWORDS.u_test_2 });
   assert.equal(foreign.status, 403);
-  assert.equal((await foreign.json()).code, 'passkey');
+  assert.equal((await foreign.json()).code, 'current-wrong');
+
+  const withoutPassword = await post('/api/pair/create', cookie('u_no_password', 0), { current: PASSWORDS.u_test_1 });
+  assert.equal(withoutPassword.status, 403);
+  assert.equal((await withoutPassword.json()).code, 'password-required');
 
   // A cookie replayed as a Bearer is no shortcut either.
   const asBearer = { Authorization: 'Bearer ' + cookie('u_test_1', 0).Cookie.slice('gymsid='.length) };
   assert.equal((await post('/api/pair/create', asBearer, {})).status, 403);
 
-  // The account's own passkey: a code, which redeems once.
-  const o2 = await options();
-  const ok = await post('/api/pair/create', cookie('u_test_1', 0), { cid: o2.cid, credential: KEYS.u_test_1.assertion(o2.options.challenge) });
+  const ok = await post('/api/pair/create', cookie('u_test_1', 0), { current: PASSWORDS.u_test_1 });
   assert.equal(ok.status, 200);
   const { code } = await ok.json();
   assert.match(code, /^[A-HJ-NP-Z2-9]{8}$/);
   assert.equal((await post('/api/pair/redeem', {}, { code })).status, 200);
-  // The challenge was spent on the proof.
-  assert.equal((await post('/api/pair/create', cookie('u_test_1', 0), { cid: o2.cid, credential: KEYS.u_test_1.assertion(o2.options.challenge) })).status, 403);
+  const replay = await post('/api/pair/redeem', {}, { code });
+  assert.equal(replay.status, 400);
+  assert.equal((await replay.json()).code, 'pair-invalid');
 });

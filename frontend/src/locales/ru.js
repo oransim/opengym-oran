@@ -289,6 +289,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'Не меньше {0} символов. Несколько не связанных между собой слов отлично подойдут.',
   'Set password & sign in': 'Задать пароль и войти',
   'Create profile': 'Создать профиль',
+  'Create account': 'Создать аккаунт',
   'Pick a name and a password. You sign in with both.': 'Выберите имя и пароль. Входить будете с ними обоими.',
   'Enter your password.': 'Введите пароль.',
   'Enter the reset code.': 'Введите код сброса.',

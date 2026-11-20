@@ -297,6 +297,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'कम से कम {0} अक्षर। कुछ आपस में असंबंधित शब्द मिलकर अच्छा पासवर्ड बनाते हैं।',
   'Set password & sign in': 'पासवर्ड सेट करें और साइन इन करें',
   'Create profile': 'प्रोफ़ाइल बनाएँ',
+  'Create account': 'खाता बनाएँ',
   'Pick a name and a password. You sign in with both.': 'एक नाम और एक पासवर्ड चुनें। आप दोनों से साइन इन करेंगे।',
   'Enter your password.': 'अपना पासवर्ड दर्ज करें।',
   'Enter the reset code.': 'रीसेट कोड दर्ज करें।',

@@ -125,6 +125,7 @@ export const PT_BR_OVERRIDES = {
   'Enter a name': 'Informe um nome',
   'Registration failed': 'Falha no cadastro',
   'Create your profile': 'Crie seu perfil',
+  'Create account': 'Criar conta',
   'Pick a name, then confirm with your device.': 'Escolha um nome e confirme com seu dispositivo.',
   'Your name': 'Seu nome',
   'Your workouts. Your weights. Your profile.': 'Seus treinos. Seus pesos. Seu perfil.',

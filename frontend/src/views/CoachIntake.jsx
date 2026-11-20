@@ -10,6 +10,7 @@
 // prefilled, and the last button saves instead of building.
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { backTo } from '../lib/nav.js'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
@@ -92,7 +93,7 @@ export default function CoachIntake() {
   const optional = ['equipment', 'limits', 'extras'].includes(key)
 
   const next = () => (last ? finish() : setStep(step + 1))
-  const back = () => (step ? setStep(step - 1) : nav(editing ? '/coach' : '/plan'))
+  const back = () => (step ? setStep(step - 1) : backTo(nav, editing ? '/coach' : '/plan'))
 
   const agree = info => {
     // This screen just named the provider and listed what goes there, which is the question the

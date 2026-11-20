@@ -156,7 +156,7 @@ describe('CoachSetup — "use my self-hosted Open Gym Oran"', () => {
   it('Back returns to Settings', async () => {
     await mount()
     await click(host.querySelector('.hdr .iconbtn'))
-    expect(mocks.nav).toHaveBeenCalledWith('/settings')
+    expect(mocks.nav).toHaveBeenCalledWith('/settings', { replace: true })
   })
 })
 

@@ -19,6 +19,7 @@ import { activeFast, fastDuration } from '../lib/fasting.js'
 import WeightRate from '../components/WeightRate.jsx'
 import WeekCalendar from '../components/WeekCalendar.jsx'
 import { SeasonDeco } from '../components/Seasonal.jsx'
+import { routineHasContent } from '../lib/visit-routine.js'
 
 function FastingCard({ fasting, onOpen }) {
   const [now, setNow] = useState(Date.now)
@@ -134,7 +135,11 @@ export default function Home() {
           : routine ? <span className="row" style={{ gap: 8 }}><MiniBodyMap routines={todayRoutines} body={S.body} /><Icon name="chevronRight" className="chev" /></span>
           : <Icon name="plus" className="chev" />}
       </div>
-      {/* Keep the Start chooser reachable when today's plan is already set. */}
+      {!S.active && !doneToday && todayRoutines.some(routineHasContent) && <Button variant="primary" icon="play"
+        style={{ marginTop: 12 }} onClick={() => startFlow(todayRoutines.map(r => r.id))}>
+        {t('Start {0}', todayName)}
+      </Button>}
+      {/* Keep the workout picker reachable when today's plan is already set or completed. */}
       {!S.active && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
         <Button size="sm" variant="ghost" className="dim" icon="swap" onClick={() => nav('/workout')}>
           {t('Choose a different workout')}

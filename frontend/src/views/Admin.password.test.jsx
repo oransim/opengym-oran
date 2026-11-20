@@ -104,7 +104,7 @@ describe('Admin → Reset password', () => {
     expect(button(code, 'Done')).toBeTruthy()
   })
 
-  it('offers it to a profile with no password too — the way back after a lost passkey', async () => {
+  it('offers it to a profile with no password too', async () => {
     mocks.answers['/api/admin/user'] = detail({ password: false, resetUntil: Date.now() + 3600000 })
     const sheet = await openMallory()
     expect(button(sheet, 'Reset password')).toBeTruthy()
@@ -113,8 +113,8 @@ describe('Admin → Reset password', () => {
   })
 })
 
-describe('Admin → sign-in e-mail', () => {
-  it('shows the address in the list and on the profile, and names it on the reset code sheet', async () => {
+describe('Admin → recovery email', () => {
+  it('shows the address in the list and on the profile, and uses the username on the reset code sheet', async () => {
     mocks.answers['/api/admin/users'] = { users: [{ id: 'u1', name: 'Mallory', workouts: 0, lastSync: null, disabled: false, password: true, email: 'mallory@example.com' }], invite_only: false, password_login: true }
     mocks.answers['/api/admin/user'] = detail({ password: true, email: 'mallory@example.com', resetUntil: null })
     const page = render(<Admin />)
@@ -127,7 +127,8 @@ describe('Admin → sign-in e-mail', () => {
     await act(async () => { await mocks.confirm.mock.calls[0][0].onConfirm() })
     await settle()
     const code = render(mocks.sheets.slice(before).find(s => s.opts?.locked).render(() => {}))
-    expect(code.textContent).toContain('or their sign-in e-mail mallory@example.com')
+    expect(code.textContent).toContain('enter their username Mallory')
+    expect(code.textContent).not.toContain('mallory@example.com')
   })
 
   it('shows nothing where the server sends no address', async () => {

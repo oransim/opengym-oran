@@ -297,6 +297,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': '최소 {0}자. 서로 관련 없는 단어 몇 개면 좋은 비밀번호가 됩니다.',
   'Set password & sign in': '비밀번호 설정 후 로그인',
   'Create profile': '프로필 생성',
+  'Create account': '계정 만들기',
   'Pick a name and a password. You sign in with both.': '이름과 비밀번호를 정하세요. 둘 다 있어야 로그인할 수 있습니다.',
   'Enter your password.': '비밀번호를 입력하세요.',
   'Enter the reset code.': '재설정 코드를 입력하세요.',

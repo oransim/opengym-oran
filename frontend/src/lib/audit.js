@@ -1,6 +1,6 @@
 // Rendering for the admin activity log (GET /api/admin/audit).
 //
-// The server stores reason codes, not sentences — `{ ev: 'auth.login.fail', msg: 'unknown-credential' }`
+// The server stores reason codes, not sentences — `{ ev: 'auth.password.fail', msg: 'bad-password' }`
 // belongs here and not in Admin.jsx: it is the only part of the feature that can be wrong in a way
 // a person sees, and as a plain module it is testable without mounting the dashboard.
 //
@@ -36,10 +36,10 @@ const LABELS = {
   'auth.password.reset': 'Used a reset code',
   // The e-mail a profile may sign in with instead of its name. `msg` is the proof it was set with
   // and the address masked to two characters ("password · a…@e…") — never the address itself.
-  'auth.email.set': 'Added a sign-in e-mail',
-  'auth.email.change': 'Changed their sign-in e-mail',
-  'auth.email.remove': 'Removed their sign-in e-mail',
-  'auth.email.fail': 'Changing the sign-in e-mail failed',
+  'auth.email.set': 'Added a recovery email',
+  'auth.email.change': 'Changed their recovery email',
+  'auth.email.remove': 'Removed their recovery email',
+  'auth.email.fail': 'Changing the recovery email failed',
   'auth.proof.fail': 'Confirming a change failed',
   // The password throttle paused an address; `msg` says for what (password, signup).
   'auth.throttled': 'Too many failed attempts from one address',
@@ -92,8 +92,8 @@ export const auditReason = msg => REASONS[msg] || (msg ? String(msg) : '')
 
 // What an `auth.proof.fail` was confirming (the server's `act`).
 const ACTS = {
-  'email': 'changing the sign-in e-mail',
-  'email-remove': 'removing the sign-in e-mail',
+  'email': 'changing the recovery email',
+  'email-remove': 'removing the recovery email',
   'password': 'setting or changing the password',
   'password-remove': 'removing the password',
   'pair': 'making a code to pair the phone app',

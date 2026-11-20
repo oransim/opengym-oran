@@ -67,7 +67,7 @@ test('db.json unreadable after a sign-up: the copy kept is the last save, so the
   let h = start(t, d, { PASSWORD_LOGIN: '1' });
   const base = `http://127.0.0.1:${await boundPort(h.child, () => h.log)}`;
   const r = await fetch(`${base}/api/register/password`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:8080' },
-    body: JSON.stringify({ name: 'Carla', password: 'correct horse battery 1' }) });
+    body: JSON.stringify({ name: 'Carla', email: 'carla@example.com', password: 'correct horse battery 1' }) });
   assert.equal(r.status, 200, await r.clone().text());
   const carla = (await r.json()).user?.id;
   assert.ok(carla);

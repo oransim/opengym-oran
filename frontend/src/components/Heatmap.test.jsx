@@ -79,13 +79,13 @@ const lastColumn = () => {
 }
 
 describe('Heatmap — week start', () => {
-  it('rows read Mon/Wed/Fri for a Monday-first week (default)', () => {
-    render(undefined)
+  it('rows read Mon/Wed/Fri for an explicitly Monday-first week', () => {
+    render(1)
     expect(dayLabels()).toEqual(['Mon', '', 'Wed', '', 'Fri', '', ''])
   })
 
-  it('shifts the same three labels down a row for a Sunday-first week', () => {
-    render(0)
+  it('shifts the same three labels down a row for the default Sunday-first week', () => {
+    render(undefined)
     expect(dayLabels()).toEqual(['', 'Mon', '', 'Wed', '', 'Fri', ''])
   })
 

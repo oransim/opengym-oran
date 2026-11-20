@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Settings from './Settings.jsx'
 import Plan from './Plan.jsx'
+import WeekCalendar from '../components/WeekCalendar.jsx'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -73,6 +74,7 @@ describe('Settings — week starts on', () => {
   const mount = () => act(() => root.render(<Settings page="plan" />))
 
   it('offers Monday and Sunday and writes the getDay() index', () => {
+    mocks.S.weekStart = 1
     mount()
     expect(segButton('Monday').getAttribute('aria-pressed')).toBe('true')
     act(() => { segButton('Sunday').click() })
@@ -83,11 +85,11 @@ describe('Settings — week starts on', () => {
     expect(mocks.S.weekStart).toBe(1)
   })
 
-  it('shows a profile written before the setting existed as Monday', () => {
+  it('shows a profile without a week-start setting as Sunday', () => {
     delete mocks.S.weekStart
     mount()
-    expect(segButton('Monday').getAttribute('aria-pressed')).toBe('true')
-    expect(segButton('Sunday').getAttribute('aria-pressed')).toBe('false')
+    expect(segButton('Monday').getAttribute('aria-pressed')).toBe('false')
+    expect(segButton('Sunday').getAttribute('aria-pressed')).toBe('true')
   })
 })
 
@@ -95,9 +97,9 @@ describe('Plan — the week schedule follows the setting', () => {
   const mount = () => act(() => root.render(<Plan />))
   const planDays = () => [...host.querySelectorAll('.plan-day')].map(e => e.getAttribute('aria-label'))
 
-  it('runs Monday to Sunday by default', () => {
+  it('runs Sunday to Saturday by default', () => {
     mount()
-    expect(planDays()).toEqual(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+    expect(planDays()).toEqual(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'])
   })
 
   it('runs Sunday to Saturday for a Sunday profile', () => {
@@ -144,5 +146,28 @@ describe('Plan — a combined day (combine routines)', () => {
     expect(tue.querySelector('.tt').textContent).toBe('Rest day')
     expect(tue.getAttribute('role')).toBe('button')
     expect(tue.querySelectorAll('button').length).toBe(0)
+  })
+})
+
+// Home and Plan both render this dated calendar. A Sunday must belong to the week
+// ahead of it; navigating a week must keep the same Sunday–Saturday boundaries.
+describe('shared Home and Plan calendar — Sunday default', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it.each(['2026-08-19', '2026-08-16', '2026-08-22'])('shows the same week for %s', iso => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(iso + 'T12:00:00'))
+    const onDay = vi.fn()
+    act(() => root.render(<WeekCalendar S={mocks.S} onDay={onDay} />))
+    const days = () => [...host.querySelectorAll('.week-calendar-day')]
+    expect(days().map(el => el.querySelector('.week-calendar-dow').textContent))
+      .toEqual(['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'])
+    expect(days().map(el => el.querySelector('.week-calendar-date').textContent))
+      .toEqual(['16', '17', '18', '19', '20', '21', '22'])
+    act(() => days()[0].click())
+    expect(onDay).toHaveBeenCalledWith('2026-08-16', 0)
+    act(() => host.querySelector('[aria-label="Next week"]').click())
+    expect(days().map(el => el.querySelector('.week-calendar-date').textContent))
+      .toEqual(['23', '24', '25', '26', '27', '28', '29'])
   })
 })

@@ -130,8 +130,8 @@ export function fmtDaysAgo(iso, dayIso = todayISO()) {
    else. */
 export const MONDAY = 1
 export const SUNDAY = 0
-/** The profile's first weekday, defaulting to Monday for every state written before this. */
-export const weekStartOf = S => (S?.weekStart === SUNDAY ? SUNDAY : MONDAY)
+/** The profile's first weekday. Israel's Sunday start is the default for this fork. */
+export const weekStartOf = S => (S?.weekStart === MONDAY ? MONDAY : SUNDAY)
 /** getDay() indices in display order — [1..6,0] for a Monday start, [0..6] for a Sunday one. */
 export const weekOrder = (ws = MONDAY) => Array.from({ length: 7 }, (_, i) => (ws + i) % 7)
 /** How many days a weekday sits past the start of its week. 0..6, so it doubles as a column. */

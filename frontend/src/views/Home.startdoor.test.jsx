@@ -1,15 +1,13 @@
 // @vitest-environment happy-dom
-// The Start button in the tab bar (components/TabBar.jsx) and Home's today row both go straight
-// into today's planned session the moment there is one, and only fall through to the Start
-// screen when nothing is planned. So on any day with a routine, a freestyle session and the
-// "Other routines" list are unreachable — the only other way in, "Choose a different workout"
-// on the weigh-in sheet, does not exist with the weigh-in switched off. Home carries that door.
+// Home owns workout actions: Start for an unfinished plan, Resume on its day card,
+// and a separate route to the picker for freestyle or another routine.
 import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { useStore } from '../store/useStore.js'
 import { startFlow } from '../sheets.jsx'
 import Home from './Home.jsx'
+import { todayISO } from '../lib/format.js'
 
 const nav = vi.fn()
 vi.mock('react-router-dom', () => ({ useNavigate: () => nav }))
@@ -41,8 +39,49 @@ const setS = (over = {}) => useStore.setState(s => ({
 }))
 const mount = () => act(() => root.render(<Home />))
 const door = () => [...host.querySelectorAll('button')].find(b => b.textContent.includes('Choose a different workout'))
+const start = () => [...host.querySelectorAll('.card button')].find(b => b.textContent === 'Start Push' || b.textContent === 'Start Yoga')
 
 describe('Home — the way to the Start screen when a plan already owns today', () => {
+  it('starts today’s planned routine from its day card', () => {
+    setS(); mount()
+    expect(start()).toBeTruthy()
+    act(() => start().click())
+    expect(startFlow).toHaveBeenCalledWith(['r1'])
+  })
+
+  it('starts a planned class even though it has no exercises', () => {
+    setS({ routines: [{ id: 'r1', name: 'Yoga', kind: 'visit', ex: [] }] }); mount()
+    expect(start()).toBeTruthy()
+    act(() => start().click())
+    expect(startFlow).toHaveBeenCalledWith(['r1'])
+  })
+
+  it('starts every routine in a combined day as one session', () => {
+    setS({ routines: [...routines, { id: 'r2', name: 'Core', ex: [{ id: '0001' }] }], week: { [new Date().getDay()]: ['r1', 'r2'] } }); mount()
+    const button = [...host.querySelectorAll('.card button')].find(b => b.textContent === 'Start Push + Core')
+    expect(button).toBeTruthy()
+    act(() => button.click())
+    expect(startFlow).toHaveBeenCalledWith(['r1', 'r2'])
+  })
+
+  it('does not offer Start again after today’s planned workout is completed', () => {
+    setS({ workouts: [{ id: 'w1', d: todayISO(), name: 'Push', routineIds: ['r1'], entries: [] }] }); mount()
+    expect(start()).toBeUndefined()
+    expect(host.querySelector('.today-row .tag').textContent).toBe('Done')
+    expect(door()).toBeTruthy()
+  })
+
+  it('does not offer Start on a rest day or for an empty routine', () => {
+    setS({ week: {} }); mount()
+    expect(start()).toBeUndefined()
+    act(() => setS({ routines: [{ id: 'r1', name: 'Push', ex: [] }] }))
+    expect(start()).toBeUndefined()
+  })
+
+  it.each([{}, { editingWorkoutId: 'w1' }])('does not offer a new Start while a session or edit is open: %j', flags => {
+    setS({ active: { id: 'a', name: 'Push', start: Date.now(), cur: 0, entries: [], ...flags } }); mount()
+    expect(start()).toBeUndefined()
+  })
   it('does not show the unused gym membership check-in card', () => {
     setS({ checkIn: true, gymCards: [{ id: 'old', value: 'ABC', fmt: 'qrcode' }] }); mount()
     expect(host.textContent).not.toContain('Check in')

@@ -297,6 +297,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'Pelo menos {0} caracteres. Algumas palavras sem relação entre si dão uma boa palavra-passe.',
   'Set password & sign in': 'Definir palavra-passe e iniciar sessão',
   'Create profile': 'Criar perfil',
+  'Create account': 'Criar conta',
   'Pick a name and a password. You sign in with both.': 'Escolhe um nome e uma palavra-passe. Inicias sessão com os dois.',
   'Enter your password.': 'Introduz a tua palavra-passe.',
   'Enter the reset code.': 'Introduz o código de reposição.',

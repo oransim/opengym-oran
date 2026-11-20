@@ -302,6 +302,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'อย่างน้อย {0} ตัวอักษร คำที่ไม่เกี่ยวข้องกันสักสองสามคำเป็นรหัสผ่านที่ดี',
   'Set password & sign in': 'ตั้งรหัสผ่านและเข้าสู่ระบบ',
   'Create profile': 'สร้างโปรไฟล์',
+  'Create account': 'สร้างบัญชี',
   'Pick a name and a password. You sign in with both.': 'เลือกชื่อและรหัสผ่าน คุณจะเข้าสู่ระบบด้วยทั้งสองอย่าง',
   'Enter your password.': 'กรอกรหัสผ่านของคุณ',
   'Enter the reset code.': 'กรอกรหัสรีเซ็ต',

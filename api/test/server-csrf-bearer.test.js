@@ -56,10 +56,10 @@ test('a Bearer header that authenticates nothing does not switch the origin chec
   assert.equal(r.status, 403);
   assert.deepEqual(await r.json(), { error: 'cross-origin request refused', code: 'origin-mismatch', expected: 'https://gym.test' });
   // With no cookie, nothing ambient is in play: that caller is not signed in, and is told so
-  // with the 401 the paired app acts on, before any handler runs. login/options answers anybody
-  // with a 200, so the 401 there is the proof the handler was never reached.
+  // with the 401 the paired app acts on, before any handler runs. Password login
+  // would answer a missing body with 400, so a 401 proves its handler was never reached.
   assert.equal((await activity(api, { ...evil, ...bogus })).status, 401);
-  const opts = await fetch(`${api}/api/login/options`, { method: 'POST', headers: { ...evil, ...bogus } });
+  const opts = await fetch(`${api}/api/login/password`, { method: 'POST', headers: { ...evil, ...bogus } });
   assert.equal(opts.status, 401);
   assert.deepEqual(await opts.json(), { error: 'not signed in' });
   // An empty "Bearer " arrives trimmed to "Bearer", which is no Bearer at all: the origin check.

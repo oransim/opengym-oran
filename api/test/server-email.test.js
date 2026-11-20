@@ -16,39 +16,10 @@ import { boundPort } from './helpers.mjs';
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
 const ORIGIN = 'http://localhost:8080';
-const b64u = b => Buffer.from(b).toString('base64url');
-
 const mintSession = (uid, sv = 0) => {
   const payload = `${uid}:${Date.now() + 86400000}:${sv}`;
   return payload + '.' + crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
 };
-
-// A passkey in software: a P-256 key whose public half goes into db.json as the COSE key the
-// server stores, and whose private half signs assertions the way an authenticator would.
-function softPasskey() {
-  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  const jwk = publicKey.export({ format: 'jwk' });
-  const cose = Buffer.concat([
-    Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]), Buffer.from(jwk.x, 'base64url'),
-    Buffer.from([0x22, 0x58, 0x20]), Buffer.from(jwk.y, 'base64url')
-  ]);
-  const id = crypto.randomBytes(16).toString('base64url');
-  let counter = 0;
-  return {
-    id,
-    row: userId => ({ id, userId, publicKey: cose.toString('base64url'), counter: 0, transports: ['internal'] }),
-    assertion(challenge) {
-      const clientDataJSON = Buffer.from(JSON.stringify({ type: 'webauthn.get', challenge, origin: ORIGIN, crossOrigin: false }));
-      const c = Buffer.alloc(4); c.writeUInt32BE(++counter);
-      const authData = Buffer.concat([crypto.createHash('sha256').update('localhost').digest(), Buffer.from([0x05]), c]);
-      const signature = crypto.sign('sha256', Buffer.concat([authData, crypto.createHash('sha256').update(clientDataJSON).digest()]), privateKey);
-      return {
-        id, rawId: id, type: 'public-key', clientExtensionResults: {}, authenticatorAttachment: 'platform',
-        response: { clientDataJSON: b64u(clientDataJSON), authenticatorData: b64u(authData), signature: b64u(signature), userHandle: null }
-      };
-    }
-  };
-}
 
 const GOOD = 'correct horse battery staple';
 let pwHash;   // one real hash of GOOD, made once — every user below that "has a password" shares it
@@ -64,16 +35,16 @@ const hashAt = (pw, ln) => new Promise((resolve, reject) => {
     : resolve(`$scrypt$v=1$ln=${ln},r=8,p=1$${salt.toString('base64')}$${key.toString('base64')}`));
 });
 
-async function startServer(t, { env = {}, users = [], creds = [], invites = [] } = {}) {
+async function startServer(t, { env = {}, users = [], invites = [] } = {}) {
   pwHash ??= await hashPassword(GOOD);
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-pw-'));
   fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users, creds, subs: [], invites }));
+  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users, subs: [], invites }));
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN, RP_ID: 'localhost',
-      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
+      TRUST_PROXY: '1', INVITE_ONLY: '', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
     }
   });
   const h = { api: '', log: '', dataDir };
@@ -119,22 +90,17 @@ test('normalizeEmail folds and checks the way sign-in compares; maskEmail keeps 
   assert.equal(maskEmail('ada@example.com'), 'a…@e…');
 });
 
-test('with PASSWORD_LOGIN off the e-mail routes are 404s, sign-in by e-mail too, and admins see no address', async t => {
+test('legacy PASSWORD_LOGIN=0 does not disable e-mail sign-in or hide addresses', async t => {
   const h = await startServer(t, {
-    env: { PASSWORD_LOGIN: '', ADMIN_UIDS: 'adm' },
+    env: { PASSWORD_LOGIN: '0', ADMIN_UIDS: 'adm' },
     users: [user('adm', 'Root'), withPassword('u1', 'Ana', { email: 'ana@example.com' })]
   });
-  const cookie = `gymsid=${mintSession('u1')}`;
-  assert.equal((await setEmail(h, cookie, { email: 'new@example.com', current: GOOD })).status, 404);
-  assert.equal((await h.req('DELETE', '/api/account/email', { body: { current: GOOD }, cookie })).status, 404);
-  assert.equal((await signIn(h, { email: 'ana@example.com', password: GOOD })).status, 404);
+  assert.equal((await h.req('GET', '/api/config')).body.password_login, true);
+  assert.equal((await signIn(h, { email: 'ana@example.com', password: GOOD })).status, 200);
   const list = await h.req('GET', '/api/admin/users', { cookie: `gymsid=${mintSession('adm')}` });
-  assert.equal(list.status, 200);
-  assert.ok(list.body.users.every(u => !('email' in u)));
+  assert.equal(list.body.users.find(u => u.id === 'u1').email, 'ana@example.com');
   const one = await h.req('GET', '/api/admin/user?id=u1', { cookie: `gymsid=${mintSession('adm')}` });
-  assert.equal('email' in one.body.user, false);
-  // The stored address stays where it is for when the flag comes back.
-  assert.equal(h.db().users.find(u => u.id === 'u1').email, 'ana@example.com');
+  assert.equal(one.body.user.email, 'ana@example.com');
 });
 
 test('signs in by e-mail in any of the three fields, case-insensitively; the name still works', async t => {
@@ -210,10 +176,8 @@ test('a wrong current password given to change the address counts toward the sam
 });
 
 test('setting, changing and removing the address needs the owner’s proof, never the session alone', async t => {
-  const pk = softPasskey();
   const h = await startServer(t, {
-    users: [withPassword('u1', 'Ana'), user('u2', 'Bea')],
-    creds: [pk.row('u2')]
+    users: [withPassword('u1', 'Ana'), user('u2', 'Bea')]
   });
   const ana = `gymsid=${mintSession('u1')}`;
   const bea = `gymsid=${mintSession('u2')}`;
@@ -248,21 +212,17 @@ test('setting, changing and removing the address needs the owner’s proof, neve
   assert.deepEqual(r.body, { ok: true, email: null });
   assert.equal('email' in h.db().users.find(u => u.id === 'u1'), false);
 
-  // A profile with no password confirms with one of its passkeys; without one it is told to.
+  // A legacy profile with no password cannot change its sign-in address through a session.
   r = await setEmail(h, bea, { email: 'bea@example.com' }, '198.51.100.130');
-  assert.equal(r.status, 403); assert.equal(r.body.code, 'passkey-required');
-  const opts = await h.req('POST', '/api/login/options', { body: {} });
-  r = await setEmail(h, bea, { email: 'bea@example.com', cid: opts.body.cid, credential: pk.assertion(opts.body.options.challenge) }, '198.51.100.131');
-  assert.equal(r.status, 200);
-  assert.equal(h.db().users.find(u => u.id === 'u2').email, 'bea@example.com');
+  assert.equal(r.status, 403); assert.equal(r.body.code, 'password-required');
+  assert.equal(h.db().users.find(u => u.id === 'u2').email, undefined);
 
   // The log says what happened and with which proof, with the address masked.
   const evs = h.audit().filter(e => e.ev.startsWith('auth.email.'));
   assert.deepEqual(evs.filter(e => e.ok).map(e => [e.ev, e.uid, e.msg]), [
     ['auth.email.set', 'u1', 'password · a…@e…'],
     ['auth.email.change', 'u1', 'password · a…@e…'],
-    ['auth.email.remove', 'u1', 'password'],
-    ['auth.email.set', 'u2', 'passkey · b…@e…']
+    ['auth.email.remove', 'u1', 'password']
   ]);
   assert.equal(leaks(h, 'example.com'), false);
 });
@@ -286,7 +246,7 @@ test('an address is unique across profiles, case-insensitively, and never anothe
   // Signing up with an address in use, or a name that is one, is refused the same way.
   let r = await h.req('POST', '/api/register/password', { body: { name: 'Dee', password: GOOD, email: 'Ana@Example.com' }, ip: '198.51.100.150' });
   assert.equal(r.status, 409); assert.equal(r.body.code, 'email-taken');
-  r = await h.req('POST', '/api/register/password', { body: { name: 'ana@example.com', password: GOOD }, ip: '198.51.100.151' });
+  r = await h.req('POST', '/api/register/password', { body: { name: 'ana@example.com', password: GOOD, email: 'new@example.com' }, ip: '198.51.100.151' });
   assert.equal(r.status, 409); assert.equal(r.body.code, 'name-taken');
   r = await h.req('POST', '/api/register/password', { body: { name: 'Dee', password: GOOD, email: 'nope' }, ip: '198.51.100.152' });
   assert.equal(r.status, 400); assert.equal(r.body.code, 'email-invalid');
@@ -346,10 +306,10 @@ test('signing up with an address as the name counts against the address like the
   const h = await startServer(t, { users: [withPassword('u1', 'Ana', { email: 'ana@example.com' })] });
   const ip = '203.0.113.70';
   for (let i = 0; i < 21; i++) {
-    const r = await h.req('POST', '/api/register/password', { body: { name: 'ana@example.com', password: GOOD }, ip });
+    const r = await h.req('POST', '/api/register/password', { body: { name: 'ana@example.com', password: GOOD, email: 'new@example.com' }, ip });
     assert.equal(r.status, 409, 'try ' + i); assert.equal(r.body.code, 'name-taken');
   }
-  const r = await h.req('POST', '/api/register/password', { body: { name: 'ana@example.com', password: GOOD }, ip });
+  const r = await h.req('POST', '/api/register/password', { body: { name: 'ana@example.com', password: GOOD, email: 'new@example.com' }, ip });
   assert.equal(r.status, 429); assert.equal(r.body.code, 'locked');
   assert.equal(leaks(h, 'example.com'), false);
 });

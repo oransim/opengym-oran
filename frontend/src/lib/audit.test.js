@@ -56,7 +56,6 @@ describe('auditReason', () => {
   it('says what a throttle pause was for, including the kind the server passes in a variable', () => {
     expect(auditLine({ ev: 'auth.throttled', ok: false, msg: 'signup' }).sub).toMatch(/invite codes/)
     expect(auditLine({ ev: 'auth.throttled', ok: false, msg: 'password' }).sub).toMatch(/wrong passwords/)
-    expect(auditLine({ ev: 'auth.throttled', ok: false, msg: 'link' }).sub).toMatch(/device codes/)
     expect(auditLine({ ev: 'auth.throttled', ok: false, msg: 'email' }).sub).toMatch(/e-mail addresses/)
   })
   it('falls back to the raw code and tolerates none at all', () => {
@@ -68,33 +67,25 @@ describe('auditReason', () => {
 describe('auditLine', () => {
   it('reads the server lists off api/server.js, pairing events included', () => {
     // Guards the extraction itself: an empty match would make the two loops above vacuous.
-    expect(EVENTS).toEqual(expect.arrayContaining(['auth.login.ok', 'auth.pair.create', 'auth.pair.ok', 'auth.pair.fail', 'admin.audit.clear']))
-    expect(REASONS).toEqual(expect.arrayContaining(['challenge-expired', 'code-invalid', 'user-unavailable']))
+    expect(EVENTS).toEqual(expect.arrayContaining(['auth.password.ok', 'auth.pair.create', 'auth.pair.ok', 'auth.pair.fail', 'admin.audit.clear']))
+    expect(REASONS).toEqual(expect.arrayContaining(['account-disabled', 'code-invalid', 'user-unavailable']))
     expect(auditLine({ ev: 'auth.pair.fail', ok: false, msg: 'code-invalid' })).toEqual({ title: 'Pairing failed', sub: 'unknown caller · wrong or expired pairing code' })
     expect(auditLine({ ev: 'auth.pair.ok', ok: true, name: 'Verifier' })).toEqual({ title: 'Paired a phone', sub: 'Verifier' })
   })
 
-  it('reads the passkey and device-code events, including the refusals passed on from passkeys-store.js (#95)', () => {
-    expect(EVENTS).toEqual(expect.arrayContaining(['auth.passkey.add', 'auth.passkey.remove', 'auth.link.create', 'auth.link.ok', 'auth.link.fail']))
-    expect(auditLine({ ev: 'auth.link.fail', ok: false, msg: 'link-invalid' })).toEqual({ title: 'Adding a device with a code failed', sub: 'unknown caller · wrong, used or expired device code' })
-    expect(auditLine({ ev: 'auth.passkey.fail', ok: false, name: 'Ana', msg: 'passkey-limit' }).sub).toBe('Ana · the profile already has as many passkeys as it can hold')
-    expect(auditLine({ ev: 'auth.passkey.add', ok: true, name: 'Ana', msg: 'password' })).toEqual({ title: 'Added a passkey', sub: 'Ana · password' })
-    expect(auditLine({ ev: 'auth.passkey.fail', ok: false, name: 'Ana', msg: 'credential-exists' }).sub).not.toMatch(/credential-exists/)
-  })
-
-  it('reads the sign-in e-mail events, whose line carries only a masked address', () => {
+  it('reads the recovery email events, whose line carries only a masked address', () => {
     // set/change are picked by a ternary the extraction above cannot read, like password set/change.
     expect(EVENTS).toEqual(expect.arrayContaining(['auth.email.remove', 'auth.email.fail']))
     expect(SERVER).toContain("first ? 'auth.email.set' : 'auth.email.change'")
-    expect(auditLabel('auth.email.change')).toBe('Changed their sign-in e-mail')
-    expect(auditLine({ ev: 'auth.email.set', ok: true, name: 'Ana', msg: 'passkey · a…@e…' })).toEqual({ title: 'Added a sign-in e-mail', sub: 'Ana · passkey · a…@e…' })
+    expect(auditLabel('auth.email.change')).toBe('Changed their recovery email')
+    expect(auditLine({ ev: 'auth.email.set', ok: true, name: 'Ana', msg: 'password · a…@e…' })).toEqual({ title: 'Added a recovery email', sub: 'Ana · password · a…@e…' })
     expect(auditLine({ ev: 'auth.email.fail', ok: false, name: 'Ana', msg: 'email-taken' }).sub).toBe('Ana · another profile already uses that e-mail')
     expect(auditLine({ ev: 'auth.password.fail', ok: false, msg: 'unknown-email' }).sub).toBe('unknown caller · no profile with a password has that e-mail')
   })
 
   it('names the person who did it', () => {
-    expect(auditLine({ ev: 'auth.login.ok', ok: true, uid: 'u1', name: 'Duarte' }))
-      .toEqual({ title: 'Signed in', sub: 'Duarte' })
+    expect(auditLine({ ev: 'auth.password.ok', ok: true, uid: 'u1', name: 'Duarte' }))
+      .toEqual({ title: 'Signed in with a password', sub: 'Duarte' })
   })
 
   it('shows both sides of an admin action', () => {
@@ -104,26 +95,26 @@ describe('auditLine', () => {
   })
 
   it('translates the reason on a failure but not the invite code on a success', () => {
-    expect(auditLine({ ev: 'auth.login.fail', ok: false, msg: 'unknown-credential' }).sub)
-      .toBe('unknown caller · unknown passkey')
+    expect(auditLine({ ev: 'auth.password.fail', ok: false, msg: 'bad-password' }).sub)
+      .toBe('unknown caller · wrong password')
     // admin.invite.* put the actual code in msg — that must not be run through auditReason.
     expect(auditLine({ ev: 'admin.invite.create', ok: true, name: 'Duarte', msg: 'A1B2C3D4' }).sub)
       .toBe('Duarte · A1B2C3D4')
   })
 
   it('says "unknown caller" only when a failure carries no identity', () => {
-    expect(auditLine({ ev: 'auth.login.fail', ok: false }).sub).toBe('unknown caller')
+    expect(auditLine({ ev: 'auth.password.fail', ok: false }).sub).toBe('unknown caller')
     // A successful event without a name is not an anonymous attacker, so it stays blank.
     expect(auditLine({ ev: 'auth.logout', ok: true }).sub).toBe('')
   })
 
   it('falls back to the uid when the name was never recorded', () => {
-    expect(auditLine({ ev: 'auth.login.fail', ok: false, uid: 'Xy1', msg: 'user-missing' }).sub)
-      .toBe('Xy1 · the passkey points at a profile that no longer exists')
+    expect(auditLine({ ev: 'auth.password.fail', ok: false, uid: 'Xy1', msg: 'account-disabled' }).sub)
+      .toBe('Xy1 · the account is disabled')
   })
 
   it('appends the network when the operator opted into IPs', () => {
-    expect(auditLine({ ev: 'auth.login.ok', ok: true, name: 'Duarte', ip: '203.0.113.0/24' }).sub)
+    expect(auditLine({ ev: 'auth.password.ok', ok: true, name: 'Duarte', ip: '203.0.113.0/24' }).sub)
       .toBe('Duarte · 203.0.113.0/24')
   })
 
@@ -175,13 +166,13 @@ describe('fmtWhen', () => {
 describe('a failed proof of ownership', () => {
   const ACTS = [...new Set([...SERVER.matchAll(/proveOwner\(req, res, user, body, '([a-z-]+)'\)/g)].map(m => m[1]))]
   it('names every change the server asks a proof for', () => {
-    expect(ACTS.length).toBeGreaterThanOrEqual(7)
+    expect(ACTS.length).toBeGreaterThanOrEqual(5)
     for (const act of ACTS) expect(auditAct(act), act).not.toBe(act)
   })
   it('reads as the change, not as a sign-in', () => {
     expect(auditLine({ ev: 'auth.proof.fail', ok: false, name: 'Ana', act: 'email', msg: 'bad-current' }))
-      .toEqual({ title: 'Confirming a change failed', sub: 'Ana · changing the sign-in e-mail · wrong current password' })
-    expect(auditLine({ ev: 'auth.proof.fail', ok: false, name: 'Ana', act: 'passkey-remove', msg: 'step-up-failed' }).sub)
-      .toBe('Ana · removing a passkey · the passkey confirming the change was rejected')
+      .toEqual({ title: 'Confirming a change failed', sub: 'Ana · changing the recovery email · wrong current password' })
+    expect(auditLine({ ev: 'auth.proof.fail', ok: false, name: 'Ana', act: 'pair', msg: 'bad-current' }).sub)
+      .toBe('Ana · making a code to pair the phone app · wrong current password')
   })
 })

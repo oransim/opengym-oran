@@ -1,7 +1,5 @@
-/* The routes anyone can call without a session (pairing, passkey sign-in and sign-up) used to
-   answer a flood of junk with a 400 and an audit row each, never a 429: a few thousand requests
-   pushed every other row out of the AUDIT_MAX-capped log in seconds. And a signed-in session could
-   mint pairing codes without limit, each one kept for five minutes. Real server.js in a child. */
+/* Anonymous pairing failures are audit capped, password sign-in is throttled, and a
+   signed-in session keeps at most one live pairing code. Real server.js in a child. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -10,9 +8,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { boundPort, softPasskey } from './helpers.mjs';
+import { boundPort } from './helpers.mjs';
+import { hashPassword } from '../password.js';
 
-const KEY = softPasskey();
+const PASSWORD = 'correct horse battery staple';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -27,7 +26,7 @@ async function startServer(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-flood-'));
   fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
   fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
-    users: [{ id: 'u_test_1', name: 'One', created: new Date().toISOString() }], creds: [KEY.row('u_test_1')], subs: [], invites: []
+    users: [{ id: 'u_test_1', name: 'One', created: new Date().toISOString(), pw: { h: await hashPassword(PASSWORD) } }], subs: [], invites: []
   }));
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
@@ -58,29 +57,25 @@ test('wrong pairing codes are all answered, but only a few of them reach the aud
   assert.equal(h.audit().filter(r => r.ev === 'auth.pair.fail').length, 10, 'ten a minute per address, not thirty');
 });
 
-test('junk passkey sign-ins and sign-ups are answered but not each written to the audit log', async t => {
+test('password sign-in failures are throttled without flooding the audit log', async t => {
   const h = await startServer(t);
+  const statuses = [];
   for (let i = 0; i < 25; i++) {
-    assert.equal((await h.post('/api/login/verify', { cid: 'junk' + i, credential: { id: 'x' } })).status, 400);
-    assert.equal((await h.post('/api/register/verify', { cid: 'junk' + i })).status, 400);
+    statuses.push((await h.post('/api/login/password', { name: 'One', password: 'wrong password' })).status);
   }
-  // A valid challenge with an unknown passkey is the other cheap miss.
-  for (let i = 0; i < 15; i++) {
-    const { cid } = await (await h.post('/api/login/options')).json();
-    assert.equal((await h.post('/api/login/verify', { cid, credential: { id: 'nobody' + i } })).status, 404);
-  }
-  const rows = h.audit();
-  assert.equal(rows.filter(r => r.ev === 'auth.login.fail').length, 10);
-  assert.equal(rows.filter(r => r.ev === 'auth.register.fail').length, 10);
+  assert.ok(statuses.includes(401), 'initial attempts reach password verification');
+  assert.ok(statuses.includes(429), 'repeated attempts are paused');
+  const failures = h.audit().filter(r => r.ev === 'auth.password.fail');
+  assert.ok(failures.length > 0 && failures.length <= 10, 'failures are recorded without filling the log');
 });
 
 test('minting a pairing code retires the profile\'s previous one', async t => {
   const h = await startServer(t);
-  // Each code asks the owner proof: a passkey assertion made for that request.
+  // Each code asks the owner to confirm the current password.
   const mint = async () => {
-    const { cid, options } = await (await h.post('/api/login/options')).json();
-    const body = { cid, credential: KEY.assertion(options.challenge) };
-    return (await (await h.post('/api/pair/create', body, { ...cookie, Origin: 'http://localhost:8080' })).json()).code;
+    const r = await h.post('/api/pair/create', { current: PASSWORD }, { ...cookie, Origin: 'http://localhost:8080' });
+    assert.equal(r.status, 200);
+    return (await r.json()).code;
   };
   const first = await mint();
   const second = await mint();

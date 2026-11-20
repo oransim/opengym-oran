@@ -1493,6 +1493,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': '{0} أحرف على الأقل. بضع كلمات غير مترابطة تصنع كلمة مرور جيدة.',
   'Set password & sign in': 'تعيين كلمة المرور وتسجيل الدخول',
   'Create profile': 'إنشاء ملف شخصي',
+  'Create account': 'إنشاء حساب',
   'Pick a name and a password. You sign in with both.': 'اختر اسمًا وكلمة مرور. تسجّل الدخول بكليهما.',
   'Enter your password.': 'أدخل كلمة المرور.',
   'Enter the reset code.': 'أدخل رمز إعادة التعيين.',

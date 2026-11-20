@@ -1435,6 +1435,7 @@ export default {
   'At least {0} characters. A few unrelated words make a good one.': 'Щонайменше {0} символів. Кілька не пов’язаних між собою слів дають добрий пароль.',
   'Set password & sign in': 'Задати пароль і увійти',
   'Create profile': 'Створити профіль',
+  'Create account': 'Створити обліковий запис',
   'Pick a name and a password. You sign in with both.': 'Обери ім’я та пароль. Для входу знадобляться обидва.',
   'Enter your password.': 'Введи пароль.',
   'Enter the reset code.': 'Введи код скидання.',

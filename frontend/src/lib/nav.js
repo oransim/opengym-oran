@@ -11,6 +11,18 @@ const pathAt = new Map()
 const idxNow = () => { try { return Number(globalThis.history?.state?.idx) || 0 } catch { return 0 } }
 export const notePath = (path, key) => { pathAt.set(idxNow(), { path, key: key || null }) }
 export const pathBefore = () => (idxNow() > 0 ? pathAt.get(idxNow() - 1)?.path || null : null)
+// A page's own back arrow should consume the entry that opened it. If there is no matching
+// in-app entry (a direct link or reload), replace the page with its parent instead of pushing
+// a parent on top of it, which would make the next Back reopen this page.
+export const backPath = (fallback, from = [fallback]) => {
+  const previous = pathBefore()
+  return previous && from.includes(previous) ? previous : fallback
+}
+export const backTo = (navigate, fallback, from = [fallback]) => {
+  const previous = pathBefore()
+  if (previous && from.includes(previous)) navigate(-1)
+  else navigate(fallback, { replace: true })
+}
 /** The router key of the entry before this one, when it showed `path`: the page underneath an
  *  edge swipe back is that entry's page, and a view keyed on its entry (Settings' search) reads it. */
 export const keyBefore = path => { const e = idxNow() > 0 ? pathAt.get(idxNow() - 1) : null; return e && e.path === path ? e.key : null }
