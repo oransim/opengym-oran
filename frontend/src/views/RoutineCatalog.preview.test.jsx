@@ -17,6 +17,7 @@ const preview = () => host.querySelector('.routine-catalog-preview')
 const mount = () => act(() => root.render(<MemoryRouter><RoutineCatalog /><Modals /></MemoryRouter>))
 function openPreview(name) {
   const row = [...host.querySelectorAll('.routine-catalog-results > .item')].find(r => r.querySelector('.tt').textContent === name)
+  expect(row, `Library routine: ${name}`).toBeTruthy()
   const details = button(row, 'Details')
   expect(details).toBeTruthy()
   act(() => details.click())
@@ -47,6 +48,55 @@ afterEach(() => {
 })
 
 describe('routine library preview before adding', () => {
+  it.each([
+    {
+      name: 'Press to Handstand A — Lift-Off & Compression',
+      exercises: ['Press to handstand warm-up', 'Feet-elevated straddle press', 'Elevated toes-to-wrist on blocks', 'Pancake good mornings'],
+      sideIndex: 2, dose: '2 × 8–12 · 4–6/side', rest: 45,
+    },
+    {
+      name: 'Press to Handstand B — Control & Negatives',
+      exercises: ['Press to handstand warm-up', '90-degree wall pike toe taps', 'Straddle press negatives', 'Seated straddle compression lifts', 'Pancake good mornings'],
+      sideIndex: 1, dose: '2 × 6–10 · 3–5/side', rest: 30,
+    },
+  ])('previews and imports $name with the agreed per-side doses and rests', ({ name, exercises, sideIndex, dose, rest }) => {
+    const sheet = openPreview(name)
+    const rows = [...sheet.querySelectorAll('.list > .item')]
+    expect(rows.map(row => row.querySelector('.tt').textContent)).toEqual(exercises)
+    expect(rows[0].querySelector('.ss').textContent).toBe('1 × 2:00')
+    expect(rows[0].textContent).toContain('10–15 minutes')
+    expect(rows[sideIndex].querySelector('.ss').textContent).toBe(dose)
+    expect(useStore.getState().S.routines).toHaveLength(1)
+    act(() => button(sheet, 'Add to my routines').click())
+    const state = useStore.getState().S
+    const imported = state.routines.find(r => r.name === name)
+    expect(imported.excludeFromProgression).toBe(true)
+    expect(imported.ex[0]).toMatchObject({ sets: 1, mode: 'time', sec: 120 })
+    expect(imported.ex[sideIndex]).toMatchObject({ sets: 2, side: true, sideRestOff: true, restSec: rest, bodyweight: true })
+    expect(imported.ex.map(entry => state.customEx.find(ex => ex.id === entry.id)?.n)).toEqual(exercises)
+    expect(state.customEx.every(ex => ex.desc && ex.eq === 'body weight')).toBe(true)
+    expect(preview()).toBeNull()
+  })
+
+  it('adds both handstand routines without duplicating their shared exercises or changing the schedule', () => {
+    const beforeWeek = structuredClone(useStore.getState().S.week)
+    let sheet = openPreview('Press to Handstand A — Lift-Off & Compression')
+    act(() => button(sheet, 'Add to my routines').click())
+    sheet = openPreview('Press to Handstand B — Control & Negatives')
+    act(() => button(sheet, 'Add to my routines').click())
+    const state = useStore.getState().S
+    expect(state.routines).toHaveLength(3)
+    expect(state.customEx).toHaveLength(7)
+    const [, a, b] = state.routines
+    expect(a.ex[0].id).toBe(b.ex[0].id)
+    expect(a.ex[3].id).toBe(b.ex[4].id)
+    expect(a.ex[1]).toMatchObject({ sets: 2, repsMin: 1, reps: 2, restSec: 75 })
+    expect(b.ex[2]).toMatchObject({ sets: 2, reps: 1, restSec: 75 })
+    expect(b.ex[2].note).toContain('3–5 seconds')
+    expect(b.ex[3]).toMatchObject({ sets: 1, repsMin: 8, reps: 10 })
+    expect(state.week).toEqual(beforeWeek)
+  })
+
   it('shows the exercises, durations, reps and notes without adding anything', () => {
     const before = structuredClone(useStore.getState().S)
     const storage = localStorage.getItem('gym_state_v1')

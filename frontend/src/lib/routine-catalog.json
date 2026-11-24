@@ -400,6 +400,122 @@
       "emoji": "stretch",
       "kind": "visit",
       "ex": []
+    },
+    {
+      "id": "skill-press-handstand-a",
+      "name": "Press to Handstand A — Lift-Off & Compression",
+      "emoji": "figureStrength",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "cpress-handstand-warmup",
+          "sets": 1,
+          "mode": "time",
+          "sec": 120,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 15,
+          "note": "About 10–15 minutes. Alternate A/B/A, then B/A/B, on three nonconsecutive days each week. Optional fourth session: 5–8 easy minutes of seated compression lifts and pancake work only. Start the main press or negative drill at 2 sets; add a third when consistently controlled. Keep loaded work pain-free and use a practiced handstand exit.\nWarm up with gentle wrist rocks and 6–8 straight-arm pike shoulder shrugs for about two minutes."
+        },
+        {
+          "id": "cpress-handstand-elevated-straddle-press",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 2,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 75,
+          "repsMin": 1,
+          "note": "2–3 sets of 1–2 clean reps; start with 2 sets. Feet on a stable box, hands on the floor. Push tall and float up without jumping; controlled partial lift-offs count. Rest 60–90 seconds between sets (timer: 75 seconds). Lower the box gradually after two consistently clean sessions."
+        },
+        {
+          "id": "cpress-handstand-toes-to-wrist",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 12,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 45,
+          "repsMin": 8,
+          "side": true,
+          "sideRestOff": true,
+          "note": "4–6 reps per side (8–12 total). Hands on stable blocks, feet start on the floor. Lift each foot toward the same-side wrist without hopping; keep pushing tall through straight arms. Change sides without a rest, then rest 30–45 seconds between sets (timer: 45 seconds)."
+        },
+        {
+          "id": "cpress-handstand-pancake-good-morning",
+          "sets": 1,
+          "mode": "reps",
+          "reps": 8,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 30,
+          "repsMin": 6,
+          "note": "6–8 slow hip hinges in a seated straddle. Keep a long back; elevate your seat if needed. Stay within your controlled range."
+        }
+      ]
+    },
+    {
+      "id": "skill-press-handstand-b",
+      "name": "Press to Handstand B — Control & Negatives",
+      "emoji": "figureStrength",
+      "excludeFromProgression": true,
+      "ex": [
+        {
+          "id": "cpress-handstand-warmup",
+          "sets": 1,
+          "mode": "time",
+          "sec": 120,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 15,
+          "note": "About 10–15 minutes. Alternate A/B/A, then B/A/B, on three nonconsecutive days each week. Optional fourth session: 5–8 easy minutes of seated compression lifts and pancake work only. Start the main press or negative drill at 2 sets; add a third when consistently controlled. Keep loaded work pain-free and use a practiced handstand exit.\nWarm up with gentle wrist rocks and 6–8 straight-arm pike shoulder shrugs for about two minutes."
+        },
+        {
+          "id": "cpress-handstand-wall-pike-toe-taps",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 30,
+          "repsMin": 6,
+          "side": true,
+          "sideRestOff": true,
+          "note": "3–5 slow reps per side (6–10 total). From an L-shaped wall handstand, gently unload one foot, lift it away, and return softly. Keep hips over shoulders; do not push off the wall. Change sides without a rest, then rest 30–45 seconds between sets (timer: 30 seconds)."
+        },
+        {
+          "id": "cpress-handstand-straddle-negative",
+          "sets": 2,
+          "mode": "reps",
+          "reps": 1,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 75,
+          "note": "2–3 sets of 1 rep; start with 2 sets. Lower from handstand through a straddle over 3–5 seconds with straight elbows. Finish on a stable raised surface if needed to maintain control. Rest 60–90 seconds between sets (timer: 75 seconds). End the set if elbows bend or the descent becomes uncontrolled."
+        },
+        {
+          "id": "cpress-handstand-straddle-compression",
+          "sets": 1,
+          "mode": "reps",
+          "reps": 10,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 30,
+          "repsMin": 8,
+          "note": "8–10 controlled lifts with straight knees. Briefly pause with both heels off the floor; avoid leaning backward. Bring hands closer to your hips or lift one leg at a time if needed."
+        },
+        {
+          "id": "cpress-handstand-pancake-good-morning",
+          "sets": 1,
+          "mode": "reps",
+          "reps": 8,
+          "weight": 0,
+          "bodyweight": true,
+          "restSec": 30,
+          "repsMin": 6,
+          "note": "6–8 slow hip hinges in a seated straddle. Keep a long back; elevate your seat if needed. Stay within your controlled range."
+        }
+      ]
     }
   ],
   "customEx": [
@@ -428,6 +544,135 @@
       ],
       "custom": true,
       "desc": "Warm up for 6–8 minutes: easy jogging or marching, ankle rocks, controlled squats, reverse lunges, then several gentle practice jumps. No equipment. Use a clear, level, nonslip area with enough overhead space. Stop for pain. End a jumping set when height or landing control drops. This routine supports jumping power; practice new flips with your coach."
+    },
+    {
+      "id": "cpress-handstand-warmup",
+      "n": "Press to handstand warm-up",
+      "bp": "shoulders",
+      "eq": "body weight",
+      "tg": "forearm",
+      "primaries": [
+        "forearm",
+        "deltoids"
+      ],
+      "secondaries": [
+        "serratus"
+      ],
+      "custom": true,
+      "desc": "Spend about two minutes preparing wrists and shoulders. On hands and knees, keep palms flat and gently rock forward and back within a comfortable range. Then move to a pike with hands and feet on the floor. With elbows straight, let the shoulders settle slightly, then push the floor away to shrug tall for 6–8 controlled repetitions. Keep the movement small and pain-free.",
+      "url": "https://gmb.io/press-handstand/"
+    },
+    {
+      "id": "cpress-handstand-elevated-straddle-press",
+      "n": "Feet-elevated straddle press",
+      "bp": "shoulders",
+      "eq": "body weight",
+      "tg": "deltoids",
+      "primaries": [
+        "deltoids",
+        "serratus"
+      ],
+      "secondaries": [
+        "trapezius",
+        "triceps",
+        "abs",
+        "hip-flexors"
+      ],
+      "custom": true,
+      "desc": "Put your feet on a stable, nonslip box and your hands on the floor in front of it. Open into a straddle, straighten your elbows and push tall through your shoulders. Raise the hips and gradually transfer weight into your hands until the feet become light and float off. Continue into a handstand only while controlled, then return or use your practiced exit. Start with partial lift-offs or a higher foot support if needed. Avoid jumping. Lower the foot support gradually as clean repetitions become consistent.",
+      "url": "https://www.tumbltrak.co.uk/press-to-handstand-from-elevated-height-training-tip/"
+    },
+    {
+      "id": "cpress-handstand-toes-to-wrist",
+      "n": "Elevated toes-to-wrist on blocks",
+      "bp": "waist",
+      "eq": "body weight",
+      "tg": "hip-flexors",
+      "primaries": [
+        "hip-flexors",
+        "abs"
+      ],
+      "secondaries": [
+        "deltoids",
+        "serratus",
+        "forearm"
+      ],
+      "custom": true,
+      "desc": "Place your hands on two stable blocks on their broad, low setting, with your feet on the floor behind them. Fold at the hips and shift weight into the hands while pushing tall through straight arms. Lift one foot toward the wrist on the same side without hopping or swinging. Lower it softly and repeat on the other side. Work toward straighter knees within your active range. The blocks support your hands, not your feet. Stop a set if the elbows bend or control is lost.",
+      "url": "https://yolohayoga.com/blogs/yoloha-life/handstand-drills-with-yoga-wheel-and-blocks"
+    },
+    {
+      "id": "cpress-handstand-wall-pike-toe-taps",
+      "n": "90-degree wall pike toe taps",
+      "bp": "shoulders",
+      "eq": "body weight",
+      "tg": "deltoids",
+      "primaries": [
+        "deltoids",
+        "serratus"
+      ],
+      "secondaries": [
+        "trapezius",
+        "triceps",
+        "abs"
+      ],
+      "custom": true,
+      "desc": "Place your hands on the floor about a leg length from a wall and walk your feet up to hip height. Form an L shape, with hips over shoulders and shoulders over hands. Keep elbows straight and push the floor away. Gradually unload one foot, lift it gently away from the wall, and return with a soft toe tap. Repeat on the other side without pushing off the wall or twisting the hips. Walk the feet down to exit. Use this as a controlled weight-transfer drill.",
+      "url": "https://learn.handstandpro.app/en/exercises/wall-pike-hold/"
+    },
+    {
+      "id": "cpress-handstand-straddle-negative",
+      "n": "Straddle press negatives",
+      "bp": "shoulders",
+      "eq": "body weight",
+      "tg": "deltoids",
+      "primaries": [
+        "deltoids",
+        "serratus",
+        "abs"
+      ],
+      "secondaries": [
+        "triceps",
+        "hip-flexors",
+        "trapezius"
+      ],
+      "custom": true,
+      "desc": "Start in a stable handstand using an entry and exit you can control. Keep the elbows straight and shoulders pushing tall. Open the legs into a straddle and fold at the hips as you slowly lower the feet toward the floor. Aim for a controlled 3–5 second descent. Finish on a stable raised surface if the full range causes elbow bending or an uncontrolled drop. Reset between repetitions. Use a clear area and finish the set when control deteriorates.",
+      "url": "https://www.gymnasticbodies.com/exercises/negative-standing-straddle-press-handstand"
+    },
+    {
+      "id": "cpress-handstand-straddle-compression",
+      "n": "Seated straddle compression lifts",
+      "bp": "waist",
+      "eq": "body weight",
+      "tg": "hip-flexors",
+      "primaries": [
+        "hip-flexors",
+        "abs"
+      ],
+      "secondaries": [
+        "quadriceps"
+      ],
+      "custom": true,
+      "desc": "Sit with legs apart, knees straight and hands on the floor between your thighs. Press through straight arms and actively lift both heels while keeping the torso from leaning backward. Pause briefly with the heels clear of the floor, then lower with control. Move the hands closer to your hips or lift one leg at a time if both legs will not clear. Use a height and range you can control without bouncing.",
+      "url": "https://www.gymnasticbodies.com/exercises/seated-straddle-lift"
+    },
+    {
+      "id": "cpress-handstand-pancake-good-morning",
+      "n": "Pancake good mornings",
+      "bp": "upper legs",
+      "eq": "body weight",
+      "tg": "hamstring",
+      "primaries": [
+        "hamstring",
+        "adductors"
+      ],
+      "secondaries": [
+        "lower-back"
+      ],
+      "custom": true,
+      "desc": "Sit in a comfortable straddle with knees pointing up and legs active. Elevate your seat on a stable cushion or block if you cannot sit upright. Hinge forward from the hips with a long back, stopping at a range you control. Pause briefly, then return upright. Move slowly without bouncing, forcing depth or allowing the knees to roll inward. Use body weight only.",
+      "url": "https://www.gymnasticbodies.com/exercises/pancake-good-morning"
     }
   ]
 }

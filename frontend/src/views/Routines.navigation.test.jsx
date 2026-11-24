@@ -111,8 +111,9 @@ describe('Routines root view', () => {
 
   it('brings along the bundled custom exercise used by Tricking power', async () => {
     await act(async () => button('Browse library').click())
-    const add = [...host.querySelectorAll('button')].filter(b => b.textContent === 'Add to my routines')
-    await act(async () => add.at(-2).click())
+    const row = [...host.querySelectorAll('.routine-catalog-results > .item')].find(r => r.querySelector('.tt').textContent === 'Tricking power')
+    const add = [...row.querySelectorAll('button')].find(b => b.textContent === 'Add to my routines')
+    await act(async () => add.click())
     const state = useStore.getState().S
     const routine = state.routines.find(r => r.name === 'Tricking power')
     expect(routine).toBeTruthy()
